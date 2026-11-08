@@ -1,4 +1,4 @@
-````markdown
+
 ```mermaid
 flowchart LR
   API[Weather APIs] --> P[Kafka producer]
@@ -6,4 +6,3 @@ flowchart LR
   T --> S[Spark processor]
   S --> ...
 ```
-````
