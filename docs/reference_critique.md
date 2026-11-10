@@ -14,14 +14,12 @@ Reference repo: <https://github.com/SyedRoshanAli/WeatherFlow-DataEngineering>
 | **Serving** | Flask web dashboard with ApexCharts.js | Shows weather insights as interactive charts. Users can add a new city through the UI, and the dashboard fetches and displays its data. The README also mentions a Streamlit script, so the real dashboard framework needs checking. | **Neither.** It is request-driven: data updates when the page loads or a user adds a city. |
 | **Packaging** | Docker Compose | Starts the whole platform with `docker-compose up -d`: Airflow, PostgreSQL, Kafka, Kafdrop, Spark, the producer, the consumer and the dashboard. All containers share one network (`weather-network`) and expose fixed ports. | **Neither.** It is infrastructure. |
 
+> **Evidence level:** this table is built from the repo's `README.md`. Before you submit, check these against `IMPLEMENTATION.md` and the `weather_flow/` code: the Kafka topic name, whether the Spark job really streams, the Airflow schedule, which dashboard framework is actually run, and what is really stored in PostgreSQL.
+
+## Architecture diagram
+
+<!-- TODO: add Mermaid diagram labelled E / T / L -->
+
 ## Critique
 
-**What it does well.** Each concern has its own folder and container (ingestion, processing, orchestration, storage, serving), so one part can change without breaking the rest. The Kafka topic also decouples fetching from processing. Raw and processed zones in the data lake allow reprocessing, and Docker Compose starts the whole platform with one command.
-
-**Problems and risks.**
-
-1. **Secrets exposed.** The README prints a real WeatherAPI key beside "already configured", then repeats it in the `.env` example, a Python test one-liner and the Data Sources list. The Airflow login is also published ("username: admin, password: admin"). It should use a placeholder like `your_weatherapi_key`, keep the real key in an ignored `.env`, commit a `.env.example`, and revoke the leaked key.
-2. **Documentation contradicts itself.** The repo description says data is stored in PostgreSQL, but the README calls PostgreSQL the "Database for Airflow metadata" and describes a data lake for storage. The dashboard is Flask on port 8051, yet the README also says to run `streamlit_dashboard.py` on port 8501, a file missing from the Project Structure tree. That tree lists `README.md` and `requirements.txt` inside `weather_flow/`, and `test_weather_api.py` sits at the repo root, outside `tests/`.
-3. **Weak testing and monitoring.** "Verifying Components" relies on manual `docker logs` commands and a hand-made `weather_test` table filled with Berlin and Tokyo. Nothing would alert anyone if the producer stopped, and there are no automated tests or CI. Better: Airflow retries and failure alerts, freshness and row-count checks, and pytest running in GitHub Actions.
-
-**Essential vs overkill.** Five cities every hour is about 120 readings a day. Essential: a scheduler (Airflow, or even cron), a Python extract step, a database such as PostgreSQL, a dashboard, and Docker for repeatable setup. Overkill: Kafka and Spark. Kafka suits continuous, high-volume events, but this source updates once an hour, so the broker only adds failure points. Spark spreads work across machines, yet 120 rows fit comfortably in pandas. The README's "real-time" goal is unnecessary when the data itself is hourly.
+<!-- TODO: 300-400 words: strengths, at least 3 problems with evidence, essential vs overkill -->
