@@ -54,6 +54,8 @@ def save_raw(city_name: str, payload: dict) -> Path:
     return path
 
 
+
+
 def main() -> int:
     saved, failed = 0, 0
     for city in CITIES:
