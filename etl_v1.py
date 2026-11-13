@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
+import logging
 
 import pandas as pd
 import requests
 
-from extract import CITIES, DB_PATH, LOG_DIR,fetch_city, save_raw  
+from extract import CITIES, DB_PATH, LOG_DIR ,fetch_city, save_raw  
 import sqlite3
+logger = logging.getLogger(__name__)
 
 
 def flatten(payload: dict, city_name: str) -> pd.DataFrame:
@@ -24,9 +26,9 @@ def extract() -> list[tuple[str, dict]]:
             payload = fetch_city(city)
             save_raw(city["name"], payload)
             raw.append((city["name"], payload))
-            print(f"extracted {city['name']}")
+            logger.info("Extracted %s", city["name"])
         except requests.RequestException as err:
-            print(f"ERROR {city['name']}: {err}")
+            logger.error("Failed for %s: %s", city["name"], err)
     return raw
 
 
@@ -91,11 +93,25 @@ INSERT OR REPLACE INTO weather_hourly
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 
+def setup_logging() -> None:
+    LOG_DIR.mkdir(exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(LOG_DIR / "pipeline.log", encoding="utf-8"),
+        ],
+    )
+
+
 def main():
+    setup_logging()
+    logger.info("Pipeline started")
     raw = extract()
     df = transform(raw)
     rows = load(df)
-    print(f"Loaded {rows} rows")
+    logger.info("Loaded %d rows", rows)
 
 
 if __name__ == "__main__":

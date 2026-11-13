@@ -7,9 +7,10 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import logging
 
 import requests
-
+logger = logging.getLogger(__name__)
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
 from pathlib import Path
 
@@ -68,17 +69,18 @@ def main() -> int:
             payload = fetch_city(city)
             path = save_raw(city["name"], payload)
             records = len(payload.get("hourly", {}).get("time", []))
-            print(f"OK    {city['name']}: {records} hourly records -> {path}")
+            logger.info("%s: %d hourly records saved to %s", city["name"], records, path)
             saved += 1
         except requests.RequestException as err:
             detail = ""
             if getattr(err, "response", None) is not None:
                 detail = f" | server said: {err.response.text[:200]}"
-            print(f"ERROR {city['name']}: {err}{detail}")
+            logger.error("%s: %s%s", city["name"], err, detail)
             failed += 1
-    print(f"Done: {saved} saved, {failed} failed.")
+    logger.info("Done: %d saved, %d failed.", saved, failed)
     return 1 if failed else 0
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     sys.exit(main())
