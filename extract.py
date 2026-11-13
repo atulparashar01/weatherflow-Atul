@@ -11,7 +11,12 @@ from pathlib import Path
 import requests
 
 BASE_URL = "https://api.open-meteo.com/v1/forecast"
-RAW_DIR = Path(__file__).resolve().parent / "data" / "raw"
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent   # the folder that contains extract.py
+RAW_DIR = PROJECT_ROOT / "data" / "raw"
+DB_PATH = PROJECT_ROOT / "weather.db"
+LOG_DIR = PROJECT_ROOT / "logs"
 
 # Confirm these with the Geocoding API (Step 2) before relying on them.
 CITIES = [

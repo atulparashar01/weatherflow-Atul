@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pandas as pd
 import requests
 
-from extract import CITIES, fetch_city, save_raw  
+from extract import CITIES, DB_PATH, LOG_DIR,fetch_city, save_raw  
 import sqlite3
 
 
@@ -56,7 +56,7 @@ def transform(raw: list[tuple[str, dict]]) -> pd.DataFrame:
     return df[COLUMNS]                                             # 5. same column order
 
 
-def load(df: pd.DataFrame, db_path: str = "weather.db") -> int:
+def load(df: pd.DataFrame, db_path: db_path=DB_PATH) -> int:
     """Write to SQLite. Return number of rows written."""
     out = df.copy()
     out["observed_at"] = out["observed_at"].dt.strftime("%Y-%m-%dT%H:%M:%S")  # datetime -> text
