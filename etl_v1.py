@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import logging
+import sys
 
 import pandas as pd
 import requests
@@ -18,9 +19,9 @@ def flatten(payload: dict, city_name: str) -> pd.DataFrame:
     return df
 
 
-def extract() -> list[tuple[str, dict]]:
-    """Call the API for each city, save raw JSON, return (city, payload) pairs."""
-    raw = []
+def extract() -> tuple[list[tuple[str, dict]], list[str]]:
+    """Fetch every city. Return (good results, names of cities that failed)."""
+    raw, failed = [], []
     for city in CITIES:
         try:
             payload = fetch_city(city)
@@ -28,8 +29,9 @@ def extract() -> list[tuple[str, dict]]:
             raw.append((city["name"], payload))
             logger.info("Extracted %s", city["name"])
         except requests.RequestException as err:
-            logger.error("Failed for %s: %s", city["name"], err)
-    return raw
+            logger.error("%s: giving up: %s", city["name"], err)
+            failed.append(city["name"])
+    return raw, failed
 
 
 RENAME = {
@@ -92,7 +94,6 @@ INSERT OR REPLACE INTO weather_hourly
      precipitation_mm, wind_speed_kmh, weather_code, ingested_at_utc)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
-
 def setup_logging() -> None:
     LOG_DIR.mkdir(exist_ok=True)
     logging.basicConfig(
@@ -108,10 +109,14 @@ def setup_logging() -> None:
 def main():
     setup_logging()
     logger.info("Pipeline started")
-    raw = extract()
-    df = transform(raw)
-    rows = load(df)
-    logger.info("Loaded %d rows", rows)
+    raw, failed = extract()
+    if raw:                                   # load the cities that worked
+        rows = load(transform(raw))
+        logger.info("Loaded %d rows", rows)
+    if failed:                                # then fail loudly
+        logger.error("Run FAILED: no data for %s", ", ".join(failed))
+        sys.exit(1)
+    logger.info("Run succeeded")
 
 
 if __name__ == "__main__":

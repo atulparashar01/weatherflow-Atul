@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 import logging
+import time 
 
 import requests
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ HOURLY_VARIABLES = (
 
 
 def fetch_city(city: dict) -> dict:
-    """Call the forecast API for one city and return the parsed JSON."""
+    """Fetch one city's forecast. Try up to 3 times."""
     params = {
         "latitude": city["latitude"],
         "longitude": city["longitude"],
@@ -44,9 +45,16 @@ def fetch_city(city: dict) -> dict:
         "forecast_days": 1,
         "timezone": "Europe/London",
     }
-    response = requests.get(BASE_URL, params=params, timeout=10)
-    response.raise_for_status()  # turns 4xx/5xx into an exception
-    return response.json()
+    for attempt in range(3):
+        try:
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()                     # worked: finish here
+        except requests.RequestException as err:
+            if attempt == 2:                           # 3rd try also failed
+                raise                                  # give up, pass the error on
+            logger.warning("%s: failed (%s); retrying", city["name"], err)
+            time.sleep(2 ** attempt)                   # wait 1s, then 2s
 
 
 def save_raw(city_name: str, payload: dict) -> Path:
