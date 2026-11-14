@@ -35,7 +35,7 @@ def extract() -> tuple[list[tuple[str, dict]], list[str]]:
 
 
 RENAME = {
-    "time": "observed_at",
+    "time": "observed_at_utc",
     "temperature_2m": "temperature_c",
     "apparent_temperature": "feels_like_c",
     "relative_humidity_2m": "humidity_pct",
@@ -44,26 +44,27 @@ RENAME = {
 }
 
 COLUMNS = [
-    "city", "observed_at", "temperature_c", "feels_like_c", "humidity_pct",
+    "city", "observed_at_utc", "observed_at_local", "temperature_c", "feels_like_c", "humidity_pct",
     "precipitation_mm", "wind_speed_kmh", "weather_code", "ingested_at_utc",
 ]
 
 
-def transform(raw: list[tuple[str, dict]]) -> pd.DataFrame:
+def transform(raw):
     """Flatten, clean and standardise."""
     df = pd.concat([flatten(payload, city) for city, payload in raw], ignore_index=True)
 
-    df["time"] = pd.to_datetime(df["time"])                        # 1. text -> datetime
-    df = df.drop_duplicates(subset=["city", "time"], keep="last")  # 2. keep the latest
-    df = df.rename(columns=RENAME)                                 # 3. names with units
-    df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")  # 4. run time
-    return df[COLUMNS]                                             # 5. same column order
-
+    df = df.rename(columns=RENAME)                                          # 1. new names
+    df["observed_at_utc"] = pd.to_datetime(df["observed_at_utc"], utc=True) # 2. text -> UTC datetime
+    df["observed_at_local"] = df["observed_at_utc"].dt.tz_convert("Europe/London")  # 3. London time
+    df = df.drop_duplicates(subset=["city", "observed_at_utc"], keep="last")        # 4. no duplicates
+    df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return df[COLUMNS]
 
 def load(df: pd.DataFrame, db_path: db_path=DB_PATH) -> int:
     """Write to SQLite. Return number of rows written."""
     out = df.copy()
-    out["observed_at"] = out["observed_at"].dt.strftime("%Y-%m-%dT%H:%M:%S")  # datetime -> text
+    out["observed_at_utc"] = out["observed_at_utc"].map(pd.Timestamp.isoformat)   # datetime -> text
+    out["observed_at_local"] = out["observed_at_local"].map(pd.Timestamp.isoformat)   # datetime -> text
     out = out.astype(object).where(out.notna(), None)                          # missing -> NULL
     rows = list(out.itertuples(index=False, name=None))
 
@@ -76,7 +77,8 @@ def load(df: pd.DataFrame, db_path: db_path=DB_PATH) -> int:
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS weather_hourly (
     city              TEXT    NOT NULL,
-    observed_at       TEXT    NOT NULL,
+    observed_at_utc   TEXT    NOT NULL,
+    observed_at_local TEXT    NOT NULL,
     temperature_c     REAL,
     feels_like_c      REAL,
     humidity_pct      INTEGER,
@@ -84,15 +86,15 @@ CREATE TABLE IF NOT EXISTS weather_hourly (
     wind_speed_kmh    REAL,
     weather_code      INTEGER,
     ingested_at_utc   TEXT    NOT NULL,
-    PRIMARY KEY (city, observed_at)
+    PRIMARY KEY (city, observed_at_utc)
 );
 """
 
 INSERT = """
 INSERT OR REPLACE INTO weather_hourly
-    (city, observed_at, temperature_c, feels_like_c, humidity_pct,
+    (city, observed_at_utc, observed_at_local, temperature_c, feels_like_c, humidity_pct,
      precipitation_mm, wind_speed_kmh, weather_code, ingested_at_utc)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 """
 def setup_logging() -> None:
     LOG_DIR.mkdir(exist_ok=True)

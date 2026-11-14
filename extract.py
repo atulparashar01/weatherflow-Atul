@@ -43,7 +43,7 @@ def fetch_city(city: dict) -> dict:
         "hourly": HOURLY_VARIABLES,
         "past_days": 1,
         "forecast_days": 1,
-        "timezone": "Europe/London",
+        "timezone": "UTC",
     }
     for attempt in range(3):
         try:
