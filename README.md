@@ -21,7 +21,10 @@ A regional events company plans outdoor work in five UK cities: London, Manchest
    pip install -r requirements.txt
    ```
    To also use the notebooks and run tests, install `requirements-dev.txt` instead.
-
+5. Install the package in editable mode:
+   ```bash
+   pip install -e .
+   ```
 ## How to run the pipeline
 
 With your virtual environment active, from the repo root:
