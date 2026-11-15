@@ -1,0 +1,26 @@
+api:
+  forecast_url: https://api.open-meteo.com/v1/forecast
+  archive_url: https://archive-api.open-meteo.com/v1/archive
+  timeout_seconds: 10
+  max_retries: 3
+  hourly_variables:
+    - temperature_2m
+    - relative_humidity_2m
+    - apparent_temperature
+    - precipitation
+    - wind_speed_10m
+    - weather_code
+  timezone: UTC              # always request UTC; derive London time in transform (Task 2.2)
+
+cities:
+  - {name: London,     latitude: 51.5085, longitude: -0.1257}
+  - {name: Manchester, latitude: 53.4809, longitude: -2.2374}
+  - {name: Birmingham, latitude: 52.4814, longitude: -1.8998}
+  - {name: Edinburgh,  latitude: 55.9521, longitude: -3.1965}
+  - {name: Cardiff,    latitude: 51.4800, longitude: -3.1800}
+
+paths:                       # relative to the folder that contains config.yaml
+  raw_dir: data/raw
+  processed_dir: data/processed
+  quarantine_dir: data/quarantine
+  database: data/weather.db
