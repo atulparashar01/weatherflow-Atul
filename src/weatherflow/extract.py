@@ -54,3 +54,19 @@ def save_raw(city_name: str, payload: dict, raw_dir: Path) -> Path:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return path
+
+def extract_all(cities: list[dict], api: dict, raw_dir: Path) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Fetch and save every city. Return (good results, names of cities that failed)."""
+    results, failed = [], []
+    for city in cities:
+        try:
+            payload = fetch_city(city, api)
+        except requests.RequestException as err:
+            logger.error("%s: giving up: %s", city["name"], err)
+            failed.append(city["name"])
+            continue
+        path = save_raw(city["name"], payload, raw_dir)
+        logger.info("%s: %d hourly records saved to %s",
+                    city["name"], len(payload["hourly"]["time"]), path)
+        results.append((city["name"], payload))
+    return results, failed

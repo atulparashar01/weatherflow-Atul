@@ -32,3 +32,11 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser with its sub-commands."""
+    ...
+
+def main(argv: list[str] | None = None) -> int:
+    """Read the command, set up logging once and run it. Return the exit code."""
+    ...

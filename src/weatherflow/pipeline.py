@@ -1,34 +1,26 @@
-"""Command-line entry point:  python -m weatherflow run"""
-import argparse
+"""Wires the steps together: extract -> transform -> load."""
 import logging
-import sys
 
-from weatherflow.pipeline import run_pipeline
+from weatherflow.config import load_config
+from weatherflow.extract import extract_all
+from weatherflow.load import load
+from weatherflow.transform import transform
 
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="weatherflow", description="WeatherFlow weather data pipeline"
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("run", help="run the pipeline")
-    # more sub-commands come later, for example:
-    # subparsers.add_parser("backfill", help="load historical data")
-    return parser
+logger = logging.getLogger(__name__)
 
 
-def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+def run_pipeline() -> int:
+    """Run the whole pipeline. Return 0 if every city worked, 1 if any city failed."""
+    config = load_config()
+    paths = config["paths"]
+    logger.info("Pipeline started")
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
+    raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
+    if raw:                                          # load the cities that worked
+        load(transform(raw), paths["database"], paths["schema"])
 
-    if args.command == "run":
-        return run_pipeline()
-    return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    if failed:                                       # then fail loudly
+        logger.error("Run FAILED: no data for %s", ", ".join(failed))
+        return 1
+    logger.info("Run succeeded")
+    return 0

@@ -20,7 +20,7 @@ def load_config() -> dict:
     for key in ["forecast_url", "timeout_seconds", "max_retries", "hourly_variables", "timezone"]:
         if key not in config["api"]:
             raise ValueError(f"config.yaml: missing '{key}' under 'api'")
-    for key in ["raw_dir", "database"]:
+    for key in ["raw_dir", "database", "schema"]:
         if key not in config["paths"]:
             raise ValueError(f"config.yaml: missing '{key}' under 'paths'")
 

@@ -24,3 +24,4 @@ paths:                       # relative to the folder that contains config.yaml
   processed_dir: data/processed
   quarantine_dir: data/quarantine
   database: data/weather.db
+  schema: sql/schema.sql
