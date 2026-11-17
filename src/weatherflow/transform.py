@@ -19,11 +19,12 @@ RENAME = {
     "wind_speed_10m": "wind_speed_kmh",
 }
 
+
 COLUMNS = [
     "city", "observed_at_utc", "observed_at_local", "temperature_c", "feels_like_c",
-    "humidity_pct", "precipitation_mm", "wind_speed_kmh", "weather_code", "ingested_at_utc",
+    "humidity_pct", "precipitation_mm", "wind_speed_kmh", "weather_code",
+    "weather_description", "weather_category", "ingested_at_utc",
 ]
-
 
 def flatten_payload(payload: dict, city: str) -> pd.DataFrame:
     """Turn one API response into a table with one row per hour."""
@@ -40,8 +41,11 @@ def standardise_columns(df: pd.DataFrame, local_timezone: str = "Europe/London")
     return df
 
 
-def add_weather_description(df: pd.DataFrame) -> pd.DataFrame:
-    """Add a readable weather description and category. (Step 4)"""
+def add_weather_description(df: pd.DataFrame, wmo_codes: pd.DataFrame) -> pd.DataFrame:
+    """Join the WMO lookup table. Unknown or missing codes become "unknown"."""
+    df = df.merge(wmo_codes, on="weather_code", how="left", validate="many_to_one")
+    df["weather_description"] = df["weather_description"].fillna("unknown")
+    df["weather_category"] = df["weather_category"].fillna("unknown")
     return df
 
 
@@ -55,13 +59,13 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["city", "observed_at_utc"], keep="last")
 
 
-def transform(raw_records: list[tuple[str, dict]]) -> pd.DataFrame:
+def transform(raw_records: list[tuple[str, dict]], wmo_codes: pd.DataFrame) -> pd.DataFrame:
     """Run every transformation in order and return the clean table."""
     frames = [flatten_payload(payload, city) for city, payload in raw_records]
     df = pd.concat(frames, ignore_index=True)
 
     df = standardise_columns(df)
-    df = add_weather_description(df)
+    df = add_weather_description(df, wmo_codes)
     df = add_derived_metrics(df)
     df = deduplicate(df)
     df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")

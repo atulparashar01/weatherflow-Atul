@@ -1,5 +1,7 @@
 """Wires the steps together: extract -> transform -> load."""
 import logging
+from weatherflow.reference import load_wmo_codes 
+
 
 from weatherflow.config import load_config
 from weatherflow.extract import extract_all
@@ -17,7 +19,7 @@ def run_pipeline() -> int:
 
     raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
     if raw:                                          # load the cities that worked
-        load(transform(raw), paths["database"], paths["schema"])
+        load(transform(raw, load_wmo_codes()), paths["database"], paths["schema"])
 
     if failed:                                       # then fail loudly
         logger.error("Run FAILED: no data for %s", ", ".join(failed))

@@ -7,13 +7,6 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-INSERT = """
-INSERT OR REPLACE INTO weather_hourly
-    (city, observed_at_utc, observed_at_local, temperature_c, feels_like_c,
-     humidity_pct, precipitation_mm, wind_speed_kmh, weather_code, ingested_at_utc)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-"""
-
 
 def load(df: pd.DataFrame, db_path: Path, schema_path: Path) -> int:
     """Create the table if needed, write the rows and return how many were written."""
@@ -23,11 +16,15 @@ def load(df: pd.DataFrame, db_path: Path, schema_path: Path) -> int:
     out = out.astype(object).where(out.notna(), None)          # missing -> NULL
     rows = list(out.itertuples(index=False, name=None))
 
+    columns = list(out.columns)                   # the INSERT follows the table's columns
+    insert = (f"INSERT OR REPLACE INTO weather_hourly ({', '.join(columns)}) "
+              f"VALUES ({', '.join('?' * len(columns))})")
+
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     with conn:                                                  # saves if no error
         conn.executescript(schema_path.read_text(encoding="utf-8"))
-        conn.executemany(INSERT, rows)
+        conn.executemany(insert, rows)
     conn.close()
 
     logger.info("Loaded %d rows into %s", len(rows), db_path)
