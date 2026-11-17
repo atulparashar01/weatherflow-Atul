@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+from datetime import datetime
 
 
 def load(df: pd.DataFrame, db_path: Path, schema_path: Path) -> int:
@@ -29,3 +30,13 @@ def load(df: pd.DataFrame, db_path: Path, schema_path: Path) -> int:
 
     logger.info("Loaded %d rows into %s", len(rows), db_path)
     return len(rows)
+
+def write_parquet(df: pd.DataFrame, processed_dir: Path, run_time: datetime) -> Path:
+    """Write the table to <processed_dir>/weather_hourly/run_date=<date>/part-<timestamp>.parquet."""
+    folder = processed_dir / "weather_hourly" / f"run_date={run_time:%Y-%m-%d}"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"part-{run_time:%Y%m%dT%H%M%S}.parquet"
+    df.to_parquet(path, index=False)
+
+    logger.info("Wrote %d rows to %s", len(df), path)
+    return path
