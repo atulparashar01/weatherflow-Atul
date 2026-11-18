@@ -9,3 +9,4 @@ logs/
 *.log
 *.sqlite
 *.egg-info/
+docs/dq_reports/*.md
