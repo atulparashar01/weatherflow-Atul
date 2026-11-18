@@ -1,9 +1,11 @@
 """Wires the steps together: extract -> transform -> load."""
 import logging
+from datetime import datetime, timezone
 
 from weatherflow.config import load_config
 from weatherflow.extract import extract_all
-from weatherflow.load import load
+from weatherflow.load import load, write_parquet
+from weatherflow.reference import load_wmo_codes
 from weatherflow.transform import transform
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,9 @@ def run_pipeline() -> int:
 
     raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
     if raw:                                          # load the cities that worked
-        load(transform(raw), paths["database"], paths["schema"])
+        df = transform(raw, load_wmo_codes())
+        load(df, paths["database"], paths["schema"])
+        write_parquet(df, paths["processed_dir"], datetime.now(timezone.utc))
 
     if failed:                                       # then fail loudly
         logger.error("Run FAILED: no data for %s", ", ".join(failed))
