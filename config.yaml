@@ -24,9 +24,17 @@ paths:                       # relative to the folder that contains config.yaml
   raw_dir: data/raw
   processed_dir: data/processed
   quarantine_dir: data/quarantine
+  dq_reports_dir: docs/dq_reports
   database: data/weather.db
   schema: sql/schema.sql
 
 dim_date:
   start: "2025-01-01"
   end: "2027-12-31"
+
+data_quality:
+  temperature_c: {min: -30, max: 45}
+  humidity_pct: {min: 0, max: 100}
+  feels_like_max_gap_c: 15
+  max_data_age_hours: 3
+  min_hours_per_run: 24
