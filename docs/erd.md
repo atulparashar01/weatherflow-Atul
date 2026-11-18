@@ -77,3 +77,64 @@ erDiagram
 - Dimensions are loaded first (`dim_city`, `dim_date`), then the fact table.
 - Every load uses upserts (`INSERT ... ON CONFLICT DO UPDATE`), so running it again replaces rows instead of duplicating them.
 - The whole load runs in **one transaction**. If any row fails, nothing is committed.
+
+# WeatherFlow: Star Schema (ERD)
+
+## Grain
+
+**One row per city, per hour, per source.**
+
+## Diagram
+
+```mermaid
+erDiagram
+    dim_city ||--o{ fact_weather_hourly : "has readings"
+    dim_date ||--o{ fact_weather_hourly : "has readings"
+
+    dim_city {
+        INTEGER city_id PK
+        TEXT city_name
+        TEXT country
+        REAL latitude
+        REAL longitude
+    }
+
+    dim_date {
+        INTEGER date_id PK
+        TEXT full_date
+        INTEGER year
+        INTEGER month
+        INTEGER day
+        TEXT day_of_week
+        INTEGER is_weekend
+    }
+
+    fact_weather_hourly {
+        INTEGER city_id PK, FK
+        TEXT observed_at_utc PK
+        TEXT source PK
+        INTEGER date_id FK
+        INTEGER hour_local
+        REAL temperature_c
+        REAL temperature_f
+        REAL feels_like_c
+        INTEGER humidity_pct
+        REAL precipitation_mm
+        REAL wind_speed_kmh
+        REAL wind_speed_ms
+        INTEGER beaufort_scale
+        INTEGER weather_code
+        TEXT weather_description
+        TEXT weather_category
+        INTEGER is_daylight
+        TEXT outdoor_work_risk
+        TEXT ingested_at_utc
+    }
+```
+
+## Notes
+
+- `date_id` is the London (local) date as `YYYYMMDD`.
+- The fact table's primary key is `(city_id, observed_at_utc, source)`.
+- `source` is in the key because a second weather source is added next week.
+- `outdoor_work_risk` must be `low`, `medium` or `high`.
