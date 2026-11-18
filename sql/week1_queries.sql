@@ -1,17 +1,56 @@
--- 1. Business question: do we have data for every city, and what time range does it cover? (UTC)
-SELECT city, COUNT(*) AS row_count,
-       MIN(observed_at_utc) AS first_hour, MAX(observed_at_utc) AS last_hour
-FROM weather_hourly
-GROUP BY city;
+-- WeatherFlow analysis queries (star schema)
+-- Tables: fact_weather_hourly (f), dim_city (c), dim_date (d)
 
--- 2. Business question: how warm was each city yesterday on average? (UTC day)
-SELECT city, ROUND(AVG(temperature_c), 1) AS avg_temp_c
-FROM weather_hourly
-WHERE date(observed_at_utc) = date('now', '-1 day')
-GROUP BY city;
+-- 1. Do we have data for every city, and what time range does it cover?
+SELECT c.city_name,
+       COUNT(*)                AS row_count,
+       MIN(f.observed_at_utc)  AS first_hour_utc,
+       MAX(f.observed_at_utc)  AS last_hour_utc
+FROM fact_weather_hourly AS f
+JOIN dim_city AS c ON c.city_id = f.city_id
+GROUP BY c.city_name
+ORDER BY c.city_name;
 
--- 3. Business question: when and where was it windiest (riskiest for outdoor setups)?
-SELECT city, observed_at_local, wind_speed_kmh
-FROM weather_hourly
-ORDER BY wind_speed_kmh DESC
+-- 2. How warm was each city yesterday (London date) on average?
+SELECT c.city_name,
+       ROUND(AVG(f.temperature_c), 1) AS avg_temp_c
+FROM fact_weather_hourly AS f
+JOIN dim_city AS c ON c.city_id = f.city_id
+JOIN dim_date AS d ON d.date_id = f.date_id
+WHERE d.full_date = date('now', '-1 day')
+GROUP BY c.city_name
+ORDER BY avg_temp_c DESC;
+
+-- 3. When and where was it windiest (riskiest for outdoor setups)?
+SELECT c.city_name,
+       d.full_date,
+       f.hour_local,
+       f.wind_speed_kmh,
+       f.beaufort_scale
+FROM fact_weather_hourly AS f
+JOIN dim_city AS c ON c.city_id = f.city_id
+JOIN dim_date AS d ON d.date_id = f.date_id
+ORDER BY f.wind_speed_kmh DESC
 LIMIT 5;
+
+-- 4. NEW: average wind by city on weekends vs weekdays
+SELECT c.city_name,
+       CASE WHEN d.is_weekend = 1 THEN 'weekend' ELSE 'weekday' END AS day_type,
+       ROUND(AVG(f.wind_speed_kmh), 1) AS avg_wind_kmh,
+       COUNT(*)                        AS hours
+FROM fact_weather_hourly AS f
+JOIN dim_city AS c ON c.city_id = f.city_id
+JOIN dim_date AS d ON d.date_id = f.date_id
+GROUP BY c.city_name, d.is_weekend
+ORDER BY c.city_name, d.is_weekend;
+
+-- 5. NEW: how many hours of each outdoor-work risk level does each city have?
+SELECT c.city_name,
+       SUM(f.outdoor_work_risk = 'high')   AS high_hours,
+       SUM(f.outdoor_work_risk = 'medium') AS medium_hours,
+       SUM(f.outdoor_work_risk = 'low')    AS low_hours,
+       ROUND(100.0 * SUM(f.outdoor_work_risk = 'high') / COUNT(*), 1) AS pct_high
+FROM fact_weather_hourly AS f
+JOIN dim_city AS c ON c.city_id = f.city_id
+GROUP BY c.city_name
+ORDER BY pct_high DESC;

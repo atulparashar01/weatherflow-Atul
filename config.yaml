@@ -10,14 +10,15 @@ api:
     - precipitation
     - wind_speed_10m
     - weather_code
+    - is_day
   timezone: UTC              # always request UTC; derive London time in transform (Task 2.2)
 
 cities:
-  - {name: London,     latitude: 51.5085, longitude: -0.1257}
-  - {name: Manchester, latitude: 53.4809, longitude: -2.2374}
-  - {name: Birmingham, latitude: 52.4814, longitude: -1.8998}
-  - {name: Edinburgh,  latitude: 55.9521, longitude: -3.1965}
-  - {name: Cardiff,    latitude: 51.4800, longitude: -3.1800}
+  - {name: London,     country: England,  latitude: 51.5085, longitude: -0.1257}
+  - {name: Manchester, country: England,  latitude: 53.4809, longitude: -2.2374}
+  - {name: Birmingham, country: England,  latitude: 52.4814, longitude: -1.8998}
+  - {name: Edinburgh,  country: Scotland, latitude: 55.9521, longitude: -3.1965}
+  - {name: Cardiff,    country: Wales,    latitude: 51.4800, longitude: -3.1800}
 
 paths:                       # relative to the folder that contains config.yaml
   raw_dir: data/raw
@@ -25,3 +26,7 @@ paths:                       # relative to the folder that contains config.yaml
   quarantine_dir: data/quarantine
   database: data/weather.db
   schema: sql/schema.sql
+
+dim_date:
+  start: "2025-01-01"
+  end: "2027-12-31"

@@ -20,7 +20,7 @@ def run_pipeline() -> int:
     raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
     if raw:                                          # load the cities that worked
         df = transform(raw, load_wmo_codes())
-        load(df, paths["database"], paths["schema"])
+        load(df, config["cities"], config["dim_date"], paths["database"], paths["schema"])
         write_parquet(df, paths["processed_dir"], datetime.now(timezone.utc))
 
     if failed:                                       # then fail loudly
