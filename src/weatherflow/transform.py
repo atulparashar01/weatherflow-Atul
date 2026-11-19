@@ -92,7 +92,8 @@ def add_derived_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep one row per city and hour (the last one if there are repeats)."""
+    """Keep one row per city and hour: the one with the latest ingested_at_utc."""
+    df = df.sort_values("ingested_at_utc", kind="stable")
     return df.drop_duplicates(subset=["city", "observed_at_utc"], keep="last")
 
 
@@ -104,8 +105,8 @@ def transform(raw_records: list[tuple[str, dict]], wmo_codes: pd.DataFrame) -> p
     df = standardise_columns(df)
     df = add_weather_description(df, wmo_codes)
     df = add_derived_metrics(df)
-    df = deduplicate(df)
     df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    df = deduplicate(df)
 
     logger.info("Transformed %d rows for %d cities", len(df), df["city"].nunique())
     return df[COLUMNS]
