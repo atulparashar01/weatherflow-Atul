@@ -9,7 +9,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-SOURCE = "open-meteo"
+SOURCE = "open_meteo_forecast"
 
 # Columns of fact_weather_hourly, in the order we insert them.
 FACT_COLUMNS = [

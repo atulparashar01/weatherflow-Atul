@@ -14,7 +14,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-SOURCE = "open-meteo"
+SOURCE = "open_meteo_forecast"
 
 
 class DataQualityError(Exception):
@@ -111,13 +111,15 @@ def check_freshness(df, max_age_hours, now=None) -> CheckResult:
 
 # ---------- Put it all together ----------
 
-def validate(df: pd.DataFrame, config: dict):
-    """Run every check. Return (good_rows, quarantined_rows, results)."""
+def validate(df: pd.DataFrame, config: dict, source: str = SOURCE, check_freshness_too: bool = True):
+    """Run every check. Return (good_rows, quarantined_rows, results).
+
+    The freshness check is for normal runs only. A backfill loads old data, so it skips it.
+    """
     limits = config["data_quality"]
     city_names = [city["name"] for city in config["cities"]]
 
-    if "source" not in df.columns:
-        df = df.assign(source=SOURCE)
+    df = df.assign(source=source)
 
     # name, dimension, severity, which rows are bad, what to say about them
     row_checks = [
@@ -145,7 +147,8 @@ def validate(df: pd.DataFrame, config: dict):
 
     results.append(check_duplicates(df))
     results.append(check_missing_hours(df, city_names, limits["min_hours_per_run"]))
-    results.append(check_freshness(df, limits["max_data_age_hours"]))
+    if check_freshness_too:
+        results.append(check_freshness(df, limits["max_data_age_hours"]))
 
     # Split the table in two
     is_bad = reasons != ""
