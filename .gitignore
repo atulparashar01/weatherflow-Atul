@@ -9,4 +9,5 @@ logs/
 *.log
 *.sqlite
 *.egg-info/
-docs/dq_reports/*.md
+docs/dq_reports/*.md.coverage
+.pytest_cache/
