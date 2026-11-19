@@ -11,3 +11,6 @@ logs/
 *.egg-info/
 docs/dq_reports/*.md.coverage
 .pytest_cache/
+.coverage
+.pytest_cache/
+docs/dq_reports/*.md
