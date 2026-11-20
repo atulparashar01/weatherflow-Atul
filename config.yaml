@@ -38,3 +38,11 @@ data_quality:
   feels_like_max_gap_c: 15
   max_data_age_hours: 3
   min_hours_per_run: 24
+
+backfill:
+  chunk_days: 7          # fetch history in 7-day pieces
+  lag_days: 5            # the archive API trails real time by about 5 days
+  pause_seconds: 1       # short pause between requests, to be polite to the free API
+
+incremental:
+  overlap_hours: 2       # re-fetch the last 2 hours to catch late corrections

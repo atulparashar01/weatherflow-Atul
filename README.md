@@ -111,25 +111,32 @@ The tests never call the real API. They use a saved response (`tests/fixtures/op
 | File | What it tests |
 |---|---|
 | `tests/test_transform.py` | flatten, Fahrenheit, unknown weather code, deduplicate, `outdoor_work_risk` rules and boundaries |
-| `tests/test_validate.py` | clean data passes, a 99 °C row is quarantined, a duplicate raises `DataQualityError` |
+| `tests/test_validate.py` | clean data passes, a 99 °C row is quarantined, a duplicate raises `DataQualityError`, quarantine file and DQ report are written |
 | `tests/test_extract.py` | retry on a 503, no retry on a 404, raw file written (API mocked) |
 | `tests/test_load.py` | loading the same data twice keeps the same row count (idempotency) |
+| `tests/test_main.py` | `main(["run"])` returns 0 or 1, backfill dates are passed on (pipeline mocked) |
+| `tests/test_config.py` | paths made absolute, a missing section or key is reported by name |
+| `tests/test_watermark.py` | high-water mark ignores future forecast hours, is empty on a new database |
 
-Latest result: 26 passed. Coverage summary:
+Latest result: 36 passed. Coverage summary (every module in `src/weatherflow/` is included):
 
 ```
 Name                           Stmts   Miss  Cover
 ------------------------------------------------------------
-src\weatherflow\extract.py        47     15    68%
-src\weatherflow\load.py           56      6    89%
+src\weatherflow\__init__.py        0      0   100%
+src\weatherflow\__main__.py       24      2    92%
+src\weatherflow\config.py         19      1    95%
+src\weatherflow\extract.py        55     20    64%
+src\weatherflow\load.py           62      6    90%
+src\weatherflow\pipeline.py       96     76    21%
 src\weatherflow\reference.py       6      0   100%
 src\weatherflow\transform.py      53      0   100%
-src\weatherflow\validate.py      105     32    70%
+src\weatherflow\validate.py      105     13    88%
 ------------------------------------------------------------
-TOTAL                            267     53    80%
+TOTAL                            420    118    72%
 ```
 
-`pipeline.py`, `config.py` and `__main__.py` are not covered by the unit tests, and they do not appear in the table above.
+`pipeline.py` is the weakest module (21%). It joins the other steps together and is checked by running the real pipeline, not by unit tests.
 
 ## Project structure
 ```
@@ -139,6 +146,7 @@ weatherflow-Atul/
 ├── requirements.txt             # packages the pipeline needs
 ├── requirements-dev.txt         # extra tools for notebooks and tests
 ├── src/weatherflow/
+│   ├── __init__.py              # empty, makes this a package
 │   ├── __main__.py              # command line: python -m weatherflow run
 │   ├── pipeline.py              # extract -> transform -> validate -> load
 │   ├── config.py                # reads config.yaml
@@ -160,7 +168,10 @@ weatherflow-Atul/
 │   ├── test_transform.py
 │   ├── test_validate.py
 │   ├── test_extract.py
-│   └── test_load.py
+│   ├── test_load.py
+│   ├── test_main.py
+│   ├── test_config.py
+│   └── test_watermark.py
 ├── notebooks/                   # 01_explore.ipynb
 ├── docs/                        # data dictionary, ERD, reports, reflections
 └── etl_v1.py                    # Week 1 version, kept for history
@@ -169,3 +180,4 @@ weatherflow-Atul/
 
 ## Author
 Atul
+s
