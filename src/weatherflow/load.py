@@ -79,6 +79,23 @@ def load_dim_city(conn, cities):
     return city_ids
 
 
+def get_high_water_mark(conn, city_name: str, source: str, now_utc: datetime):
+    """Latest hour already loaded for a city and source, ignoring hours still in the future.
+
+    Returns a UTC Timestamp, or None if nothing has been loaded yet.
+    """
+    row = conn.execute(
+        """
+        SELECT MAX(f.observed_at_utc)
+        FROM fact_weather_hourly AS f
+        JOIN dim_city AS c ON c.city_id = f.city_id
+        WHERE c.city_name = ? AND f.source = ? AND f.observed_at_utc <= ?
+        """,
+        (city_name, source, now_utc.replace(microsecond=0).isoformat()),
+    ).fetchone()
+    return pd.Timestamp(row[0]) if row[0] else None
+
+
 def build_fact_rows(df: pd.DataFrame, city_ids: dict, source: str) -> list:
     """Turn the cleaned DataFrame into a list of rows for fact_weather_hourly."""
     data = df.copy()
@@ -121,11 +138,15 @@ def load(df, cities, dim_date_range, db_path, schema_path, source=SOURCE) -> int
             load_dim_date(conn, dim_date_range)
             city_ids = load_dim_city(conn, cities)
             rows = build_fact_rows(df, city_ids, source)
+            rows_before = conn.execute("SELECT COUNT(*) FROM fact_weather_hourly").fetchone()[0]
             conn.executemany(sql, rows)
+            rows_after = conn.execute("SELECT COUNT(*) FROM fact_weather_hourly").fetchone()[0]
     finally:
         conn.close()
 
-    logger.info("Loaded %d rows into fact_weather_hourly", len(rows))
+    new_rows = rows_after - rows_before
+    logger.info("Loaded %d rows into fact_weather_hourly (%d new, %d updated)",
+                len(rows), new_rows, len(rows) - new_rows)
     return len(rows)
 
 

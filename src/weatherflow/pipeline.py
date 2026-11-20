@@ -1,14 +1,16 @@
 """Wires the steps together: extract -> transform -> validate -> load."""
 import logging
+import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pandas as pd
 import requests
 
 from weatherflow.config import load_config
 from weatherflow.extract import extract_all, fetch_city_range, save_raw
-from weatherflow.load import load, write_parquet
+from weatherflow.load import get_high_water_mark, load, write_parquet
 from weatherflow.reference import load_wmo_codes
 from weatherflow.transform import transform
 from weatherflow.validate import (
@@ -46,15 +48,45 @@ def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
     return 0
 
 
+def find_start_date(config: dict, now: datetime):
+    """Where should this run start? None means "no high-water mark yet"."""
+    db_path = Path(config["paths"]["database"])
+    if not db_path.exists():
+        return None
+
+    conn = sqlite3.connect(db_path)
+    try:
+        marks = [get_high_water_mark(conn, city["name"], SOURCE_FORECAST, now)
+                 for city in config["cities"]]
+    except sqlite3.OperationalError:                  # the tables do not exist yet
+        return None
+    finally:
+        conn.close()
+
+    if any(mark is None for mark in marks):
+        return None
+    overlap = timedelta(hours=config["incremental"]["overlap_hours"])
+    return (min(marks) - overlap).date()
+
+
 def run_pipeline() -> int:
-    """Normal run: yesterday and today. Return 0 if everything worked, 1 if not."""
+    """Normal run: only what is new. Return 0 if everything worked, 1 if not."""
     config = load_config()
     paths = config["paths"]
     run_time = datetime.now(timezone.utc)
     logger.info("Pipeline started")
 
+    start_date = find_start_date(config, run_time)
+    if start_date is None:
+        logger.info("No high-water mark yet: fetching yesterday and today (past_days=1)")
+        raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
+    else:
+        end_date = run_time.date()
+        logger.info("High-water mark found: fetching %s to %s", start_date, end_date)
+        raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"],
+                                  start_date, end_date)
+
     status = 0
-    raw, failed = extract_all(config["cities"], config["api"], paths["raw_dir"])
     if raw:
         status = process_and_load(raw, config, SOURCE_FORECAST, run_time, is_normal_run=True)
 

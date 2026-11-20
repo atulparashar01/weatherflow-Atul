@@ -76,12 +76,19 @@ def save_raw(city_name: str, payload: dict, raw_dir: Path) -> Path:
     return path
 
 
-def extract_all(cities: list[dict], api: dict, raw_dir: Path) -> tuple[list[tuple[str, dict]], list[str]]:
-    """Fetch and save every city. Return (good results, names of cities that failed)."""
+def extract_all(cities: list[dict], api: dict, raw_dir: Path,
+                start_date=None, end_date=None) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Fetch and save every city. Return (good results, names of cities that failed).
+
+    Without dates: yesterday and today (past_days=1). With dates: that range, from the forecast API.
+    """
     results, failed = [], []
     for city in cities:
         try:
-            payload = fetch_city(city, api)
+            if start_date is None:
+                payload = fetch_city(city, api)
+            else:
+                payload = fetch_city_range(city, api, api["forecast_url"], start_date, end_date)
         except requests.RequestException as err:
             logger.error("%s: giving up: %s", city["name"], err)
             failed.append(city["name"])
