@@ -89,7 +89,7 @@ It injects a 99 °C reading (quarantined) and a duplicate row (the run is stoppe
 ## Check the data with SQL
 
 ```bash
-sqlite3 data/weather.db < sql/week1_queries.sql
+sqlite3 data/weather.db < sql/analysis_queries.sql
 ```
 
 No `sqlite3` command on your computer? Use Python instead:
@@ -158,10 +158,12 @@ weatherflow-Atul/
 │   └── reference/wmo_codes.csv  # weather code descriptions
 ├── sql/
 │   ├── schema.sql               # the three tables
-│   └── week1_queries.sql        # analysis queries (joins on the star schema)
+│   └── analysis_queries.sql     # 5 analysis queries (joins on the star schema)
 ├── scripts/
 │   ├── compare_formats.py       # CSV vs Parquet file size
-│   └── inject_bad_data.py       # proves the quality gate works
+│   ├── inject_bad_data.py       # proves the quality gate works
+│   ├── force_error.py           # proves a failed load saves nothing
+│   └── show_counts.py           # prints the row count of each table
 ├── tests/
 │   ├── conftest.py              # shared fixtures
 │   ├── fixtures/                # saved API response used by the tests
@@ -180,4 +182,3 @@ weatherflow-Atul/
 
 ## Author
 Atul
-s
