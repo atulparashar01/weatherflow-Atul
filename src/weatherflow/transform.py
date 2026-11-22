@@ -110,3 +110,28 @@ def transform(raw_records: list[tuple[str, dict]], wmo_codes: pd.DataFrame) -> p
 
     logger.info("Transformed %d rows for %d cities", len(df), df["city"].nunique())
     return df[COLUMNS]
+
+def normalise_weatherapi(payload: dict, city: str, local_timezone: str = "Europe/London") -> pd.DataFrame:
+    """Turn one WeatherAPI response into our standard columns, one row per hour.
+
+    A pure function: no files, no API, no secrets. Time comes from time_epoch,
+    which is Unix seconds in UTC (the text field "time" is local time).
+    """
+    rows = []
+    for day in payload["forecast"]["forecastday"]:
+        for hour in day["hour"]:
+            rows.append({
+                "city": city,
+                "observed_at_utc": pd.to_datetime(hour["time_epoch"], unit="s", utc=True),
+                "temperature_c": hour["temp_c"],
+                "feels_like_c": hour["feelslike_c"],
+                "humidity_pct": hour["humidity"],
+                "precipitation_mm": hour["precip_mm"],
+                "wind_speed_kmh": hour["wind_kph"],        # already km/h
+                "weather_code": hour["condition"]["code"],
+                "is_daylight": hour["is_day"],
+            })
+    df = pd.DataFrame(rows)
+    df["observed_at_local"] = df["observed_at_utc"].dt.tz_convert(local_timezone)
+    df["is_daylight"] = df["is_daylight"].astype("boolean")     # 1 -> True, 0 -> False
+    return df
