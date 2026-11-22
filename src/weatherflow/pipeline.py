@@ -17,7 +17,7 @@ from weatherflow.extract import (
     get_weatherapi_key,
     save_raw,
 )
-from weatherflow.load import get_high_water_mark, load, write_parquet
+from weatherflow.load import get_high_water_mark, load, read_source_rows, write_parquet
 from weatherflow.reference import load_weatherapi_codes, load_wmo_codes
 from weatherflow.transform import transform
 from weatherflow.validate import (
@@ -44,7 +44,14 @@ def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
     else:
         df = transform(raw, load_wmo_codes())
 
-    good, quarantined, results = validate(df, config, source, check_freshness_too=is_normal_run)
+    # WeatherAPI is compared with the Open-Meteo rows that are already in the database
+    other = None
+    if source == SOURCE_WEATHERAPI:
+        other = read_source_rows(paths["database"], SOURCE_FORECAST,
+                                 df["observed_at_utc"].min(), df["observed_at_utc"].max())
+
+    good, quarantined, results = validate(df, config, source, check_freshness_too=is_normal_run,
+                                          other_source_rows=other)
     write_quarantine(quarantined, paths["quarantine_dir"], run_time, source)
     write_dq_report(results, good, quarantined, paths["dq_reports_dir"], run_time, source)
 

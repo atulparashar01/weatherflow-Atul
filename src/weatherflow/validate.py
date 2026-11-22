@@ -109,12 +109,42 @@ def check_freshness(df, max_age_hours, now=None) -> CheckResult:
     return CheckResult(name, dimension, severity, True, 0, "ok")
 
 
+def check_cross_source(df, other, max_gap_c) -> CheckResult:
+    """Check 9: for the same city and hour, two sources should give about the same temperature."""
+    name, dimension, severity = "sources_agree_on_temperature", "consistency", "warn"
+    if other is None or other.empty:
+        return CheckResult(name, dimension, severity, True, 0, "no rows from the other source to compare")
+
+    mine = df[["city", "observed_at_utc", "temperature_c"]].copy()
+    theirs = other[["city", "observed_at_utc", "temperature_c"]].copy()
+    for table in (mine, theirs):          # same time type on both sides, so the merge matches
+        table["observed_at_utc"] = pd.to_datetime(table["observed_at_utc"], utc=True).dt.as_unit("ns")
+
+    both = mine.merge(theirs, on=["city", "observed_at_utc"], suffixes=("", "_other"))
+    if both.empty:
+        return CheckResult(name, dimension, severity, True, 0, "the two sources have no hours in common")
+
+    both["gap"] = (both["temperature_c"] - both["temperature_c_other"]).abs()
+    too_far = both[both["gap"] > max_gap_c]
+    if too_far.empty:
+        return CheckResult(name, dimension, severity, True, 0,
+                           f"{len(both)} shared hours compared, all within {max_gap_c} °C")
+
+    worst_city = too_far.groupby("city")["gap"].max().idxmax()
+    worst_gap = too_far["gap"].max()
+    details = (f"{len(too_far)} of {len(both)} shared hours differ by more than {max_gap_c} °C; "
+               f"worst city: {worst_city} (up to {worst_gap:.1f} °C)")
+    return CheckResult(name, dimension, severity, False, len(too_far), details)
+
+
 # ---------- Put it all together ----------
 
-def validate(df: pd.DataFrame, config: dict, source: str = SOURCE, check_freshness_too: bool = True):
+def validate(df: pd.DataFrame, config: dict, source: str = SOURCE, check_freshness_too: bool = True,
+             other_source_rows: pd.DataFrame = None):
     """Run every check. Return (good_rows, quarantined_rows, results).
 
     The freshness check is for normal runs only. A backfill loads old data, so it skips it.
+    The cross-source check runs only when rows from the other source are given.
     """
     limits = config["data_quality"]
     city_names = [city["name"] for city in config["cities"]]
@@ -149,6 +179,8 @@ def validate(df: pd.DataFrame, config: dict, source: str = SOURCE, check_freshne
     results.append(check_missing_hours(df, city_names, limits["min_hours_per_run"]))
     if check_freshness_too:
         results.append(check_freshness(df, limits["max_data_age_hours"]))
+    if other_source_rows is not None:
+        results.append(check_cross_source(df, other_source_rows, limits["cross_source_temp_gap_c"]))
 
     # Split the table in two
     is_bad = reasons != ""

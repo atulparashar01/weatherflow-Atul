@@ -150,6 +150,31 @@ def load(df, cities, dim_date_range, db_path, schema_path, source=SOURCE) -> int
     return len(rows)
 
 
+def read_source_rows(db_path, source: str, first_hour, last_hour) -> pd.DataFrame:
+    """Read city, hour and temperature of one source between two hours (for the cross-source check)."""
+    empty = pd.DataFrame(columns=["city", "observed_at_utc", "temperature_c"])
+    if not Path(db_path).exists():
+        return empty
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = pd.read_sql_query(
+            """
+            SELECT c.city_name AS city, f.observed_at_utc, f.temperature_c
+            FROM fact_weather_hourly AS f
+            JOIN dim_city AS c ON c.city_id = f.city_id
+            WHERE f.source = ? AND f.observed_at_utc BETWEEN ? AND ?
+            """,
+            conn,
+            params=[source, pd.Timestamp(first_hour).isoformat(), pd.Timestamp(last_hour).isoformat()],
+        )
+    except (sqlite3.OperationalError, pd.errors.DatabaseError):     # the tables do not exist yet
+        return empty
+    finally:
+        conn.close()
+    return rows
+
+
 def write_parquet(df: pd.DataFrame, processed_dir, run_time: datetime, source: str = "") -> Path:
     """Save the data as a Parquet file inside a run_date=YYYY-MM-DD folder."""
     folder = Path(processed_dir) / "weather_hourly" / f"run_date={run_time:%Y-%m-%d}"

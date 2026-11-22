@@ -38,6 +38,7 @@ data_quality:
   feels_like_max_gap_c: 15
   max_data_age_hours: 3
   min_hours_per_run: 24
+  cross_source_temp_gap_c: 3    
 
 backfill:
   chunk_days: 7          # fetch history in 7-day pieces
