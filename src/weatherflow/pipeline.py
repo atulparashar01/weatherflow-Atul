@@ -9,9 +9,16 @@ import pandas as pd
 import requests
 
 from weatherflow.config import load_config
-from weatherflow.extract import extract_all, fetch_city_range, save_raw
+from weatherflow.extract import (
+    MissingKeyError,
+    extract_all,
+    extract_weatherapi,
+    fetch_city_range,
+    get_weatherapi_key,
+    save_raw,
+)
 from weatherflow.load import get_high_water_mark, load, write_parquet
-from weatherflow.reference import load_wmo_codes
+from weatherflow.reference import load_weatherapi_codes, load_wmo_codes
 from weatherflow.transform import transform
 from weatherflow.validate import (
     DataQualityError,
@@ -25,17 +32,21 @@ logger = logging.getLogger(__name__)
 
 SOURCE_FORECAST = "open_meteo_forecast"
 SOURCE_ARCHIVE = "open_meteo_archive"
+SOURCE_WEATHERAPI = "weatherapi_forecast"
 
 
 def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
     """Transform -> validate -> load. Both run and backfill use this. Return 0 or 1."""
     paths = config["paths"]
 
-    df = transform(raw, load_wmo_codes())
+    if source == SOURCE_WEATHERAPI:
+        df = transform(raw, load_weatherapi_codes(), "weatherapi")
+    else:
+        df = transform(raw, load_wmo_codes())
 
     good, quarantined, results = validate(df, config, source, check_freshness_too=is_normal_run)
-    write_quarantine(quarantined, paths["quarantine_dir"], run_time)
-    write_dq_report(results, good, quarantined, paths["dq_reports_dir"], run_time)
+    write_quarantine(quarantined, paths["quarantine_dir"], run_time, source)
+    write_dq_report(results, good, quarantined, paths["dq_reports_dir"], run_time, source)
 
     try:
         raise_if_blocking_failures(results)
@@ -44,7 +55,7 @@ def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
         return 1
 
     load(good, config["cities"], config["dim_date"], paths["database"], paths["schema"], source)
-    write_parquet(good, paths["processed_dir"], run_time)
+    write_parquet(good, paths["processed_dir"], run_time, source)
     return 0
 
 
@@ -69,12 +80,9 @@ def find_start_date(config: dict, now: datetime):
     return (min(marks) - overlap).date()
 
 
-def run_pipeline() -> int:
-    """Normal run: only what is new. Return 0 if everything worked, 1 if not."""
-    config = load_config()
+def run_open_meteo(config: dict, run_time: datetime) -> int:
+    """Open-Meteo part of a normal run: only what is new. Return 0 or 1."""
     paths = config["paths"]
-    run_time = datetime.now(timezone.utc)
-    logger.info("Pipeline started")
 
     start_date = find_start_date(config, run_time)
     if start_date is None:
@@ -91,8 +99,47 @@ def run_pipeline() -> int:
         status = process_and_load(raw, config, SOURCE_FORECAST, run_time, is_normal_run=True)
 
     if failed:
-        logger.error("Run FAILED: no data for %s", ", ".join(failed))
+        logger.error("Open-Meteo FAILED: no data for %s", ", ".join(failed))
         return 1
+    return status
+
+
+def run_weatherapi(config: dict, run_time: datetime) -> int:
+    """WeatherAPI part of a normal run (today's 24 hours). Return 0 or 1."""
+    raw, failed = extract_weatherapi(config["cities"], config["weatherapi"],
+                                     config["api"], config["paths"]["raw_dir"])
+    status = 0
+    if raw:
+        status = process_and_load(raw, config, SOURCE_WEATHERAPI, run_time, is_normal_run=True)
+
+    if failed:
+        logger.error("WeatherAPI FAILED: no data for %s", ", ".join(failed))
+        return 1
+    return status
+
+
+def run_pipeline(source: str = "all") -> int:
+    """Normal run for open_meteo, weatherapi or all. Return 0 if everything worked, 1 if not."""
+    config = load_config()
+    run_time = datetime.now(timezone.utc)
+    logger.info("Pipeline started (source: %s)", source)
+
+    use_open_meteo = source in ("open_meteo", "all")
+    use_weatherapi = source in ("weatherapi", "all")
+
+    if use_weatherapi:
+        try:
+            get_weatherapi_key()              # fail now, before any request is sent
+        except MissingKeyError as error:
+            logger.error("Run FAILED: %s", error)
+            return 1
+
+    status = 0
+    if use_open_meteo:
+        status = max(status, run_open_meteo(config, run_time))
+    if use_weatherapi:
+        status = max(status, run_weatherapi(config, run_time))
+
     if status == 0:
         logger.info("Run succeeded")
     return status

@@ -173,19 +173,21 @@ def raise_if_blocking_failures(results) -> None:
 
 # ---------- Save the evidence ----------
 
-def write_quarantine(quarantined: pd.DataFrame, quarantine_dir, run_time: datetime):
+def write_quarantine(quarantined: pd.DataFrame, quarantine_dir, run_time: datetime, source: str = ""):
     """Save the quarantined rows (with their reason) as a CSV file."""
     if quarantined.empty:
         return None
     folder = Path(quarantine_dir) / f"run_date={run_time:%Y-%m-%d}"
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"quarantine-{run_time:%Y%m%dT%H%M%S}.csv"
+    tag = f"_{source}" if source else ""       # two sources in one run must not overwrite each other
+    path = folder / f"quarantine-{run_time:%Y%m%dT%H%M%S}{tag}.csv"
     quarantined.to_csv(path, index=False)
     logger.warning("Quarantined %d rows, saved to %s", len(quarantined), path)
     return path
 
 
-def write_dq_report(results, good_rows, quarantined_rows, report_dir, run_time: datetime) -> Path:
+def write_dq_report(results, good_rows, quarantined_rows, report_dir, run_time: datetime,
+                    source: str = "") -> Path:
     """Write a Markdown summary of this run to docs/dq_reports/."""
     if any(r.severity == "fail" and not r.passed for r in results):
         status = "FAILED (run stopped before loading)"
@@ -197,6 +199,7 @@ def write_dq_report(results, good_rows, quarantined_rows, report_dir, run_time: 
     lines = [
         f"# Data quality report - {run_time:%Y-%m-%d %H:%M:%S} UTC",
         "",
+        f"- **Source:** {source or 'not given'}",
         f"- **Status:** {status}",
         f"- **Rows checked:** {len(good_rows) + len(quarantined_rows)}",
         f"- **Good rows:** {len(good_rows)}",
@@ -211,7 +214,8 @@ def write_dq_report(results, good_rows, quarantined_rows, report_dir, run_time: 
 
     folder = Path(report_dir)
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{run_time:%Y%m%dT%H%M%S}.md"
+    tag = f"_{source}" if source else ""
+    path = folder / f"{run_time:%Y%m%dT%H%M%S}{tag}.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info("DQ report written to %s", path)
     return path

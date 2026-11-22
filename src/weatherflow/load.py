@@ -150,11 +150,12 @@ def load(df, cities, dim_date_range, db_path, schema_path, source=SOURCE) -> int
     return len(rows)
 
 
-def write_parquet(df: pd.DataFrame, processed_dir, run_time: datetime) -> Path:
+def write_parquet(df: pd.DataFrame, processed_dir, run_time: datetime, source: str = "") -> Path:
     """Save the data as a Parquet file inside a run_date=YYYY-MM-DD folder."""
     folder = Path(processed_dir) / "weather_hourly" / f"run_date={run_time:%Y-%m-%d}"
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"part-{run_time:%Y%m%dT%H%M%S}.parquet"
+    tag = f"_{source}" if source else ""
+    path = folder / f"part-{run_time:%Y%m%dT%H%M%S}{tag}.parquet"
     df.to_parquet(path, index=False)
     logger.info("Wrote %s", path)
     return path

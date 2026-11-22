@@ -97,19 +97,28 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["city", "observed_at_utc"], keep="last")
 
 
-def transform(raw_records: list[tuple[str, dict]], wmo_codes: pd.DataFrame) -> pd.DataFrame:
-    """Run every transformation in order and return the clean table."""
-    frames = [flatten_payload(payload, city) for city, payload in raw_records]
-    df = pd.concat(frames, ignore_index=True)
+def transform(raw_records: list[tuple[str, dict]], codes: pd.DataFrame,
+              source: str = "open_meteo") -> pd.DataFrame:
+    """Run every transformation in order and return the clean table.
 
-    df = standardise_columns(df)
-    df = add_weather_description(df, wmo_codes)
+    Only the first step depends on the source. After that, both sources use the same code.
+    `codes` is the weather code lookup that matches the source (WMO or WeatherAPI).
+    """
+    if source == "weatherapi":
+        frames = [normalise_weatherapi(payload, city) for city, payload in raw_records]
+        df = pd.concat(frames, ignore_index=True)
+    else:
+        frames = [flatten_payload(payload, city) for city, payload in raw_records]
+        df = standardise_columns(pd.concat(frames, ignore_index=True))
+
+    df = add_weather_description(df, codes)
     df = add_derived_metrics(df)
     df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     df = deduplicate(df)
 
     logger.info("Transformed %d rows for %d cities", len(df), df["city"].nunique())
     return df[COLUMNS]
+
 
 def normalise_weatherapi(payload: dict, city: str, local_timezone: str = "Europe/London") -> pd.DataFrame:
     """Turn one WeatherAPI response into our standard columns, one row per hour.
