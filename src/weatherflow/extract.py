@@ -1,13 +1,26 @@
 """Extract step: call the Open-Meteo API and save the raw JSON unchanged."""
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
+
+
+class MissingKeyError(RuntimeError):
+    """The WeatherAPI key is not set."""
+
+
+def _describe(error: Exception) -> str:
+    """Short text for logs: the error type and status code. Never the URL, which holds the API key."""
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    name = type(error).__name__
+    return f"{name} (status {status})" if status else name
 
 
 def _get_json(url: str, params: dict, name: str, api: dict) -> dict:
@@ -29,7 +42,7 @@ def _get_json(url: str, params: dict, name: str, api: dict) -> dict:
         if attempt < max_retries:
             wait = 2 ** attempt                      # 1s, 2s, 4s
             logger.warning("%s: attempt %d failed (%s); retrying in %ds",
-                           name, attempt + 1, error, wait)
+                           name, attempt + 1, _describe(error), wait)
             time.sleep(wait)
 
     raise error                                      # all tries failed
@@ -96,5 +109,48 @@ def extract_all(cities: list[dict], api: dict, raw_dir: Path,
         path = save_raw(city["name"], payload, raw_dir)
         logger.info("%s: %d hourly records saved to %s",
                     city["name"], len(payload["hourly"]["time"]), path)
+        results.append((city["name"], payload))
+    return results, failed
+
+
+def get_weatherapi_key() -> str:
+    """Read WEATHERAPI_KEY from .env or the environment. Stop with a clear message if it is missing."""
+    load_dotenv()
+    key = os.getenv("WEATHERAPI_KEY")
+    if not key:
+        raise MissingKeyError(
+            "WEATHERAPI_KEY is not set. Copy .env.example to .env and add your key."
+        )
+    return key
+
+
+def fetch_weatherapi_city(city: dict, weatherapi: dict, api: dict, key: str) -> dict:
+    """Fetch one city from WeatherAPI. The key is in the request, so never log the URL."""
+    params = {
+        "key": key,
+        "q": f"{city['latitude']},{city['longitude']}",
+        "days": weatherapi["days"],
+    }
+    return _get_json(weatherapi["forecast_url"], params, city["name"], api)
+
+
+def extract_weatherapi(cities: list[dict], weatherapi: dict, api: dict,
+                       raw_dir: Path) -> tuple[list[tuple[str, dict]], list[str]]:
+    """Fetch and save every city from WeatherAPI. Return (good results, names of cities that failed).
+
+    Raises MissingKeyError before any request is sent if the key is missing.
+    """
+    key = get_weatherapi_key()
+    results, failed = [], []
+    for city in cities:
+        try:
+            payload = fetch_weatherapi_city(city, weatherapi, api, key)
+        except requests.RequestException as err:
+            logger.error("%s: WeatherAPI giving up: %s", city["name"], _describe(err))
+            failed.append(city["name"])
+            continue
+        path = save_raw(f"{city['name']}_weatherapi", payload, raw_dir)
+        hours = sum(len(day["hour"]) for day in payload["forecast"]["forecastday"])
+        logger.info("%s: %d hourly records from WeatherAPI saved to %s", city["name"], hours, path)
         results.append((city["name"], payload))
     return results, failed

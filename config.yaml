@@ -46,3 +46,7 @@ backfill:
 
 incremental:
   overlap_hours: 2       # re-fetch the last 2 hours to catch late corrections
+  
+weatherapi:                  # second source; the key is in .env, never here
+  forecast_url: https://api.weatherapi.com/v1/forecast.json
+  days: 1
