@@ -22,17 +22,27 @@ A regional events company plans outdoor work in five UK cities: London, Manchest
    python -m pip install -e .
    ```
    To also use the notebooks and run tests, install `requirements-dev.txt` instead of `requirements.txt`.
+5. Add your WeatherAPI key. Sign up (free) at weatherapi.com, then copy the example file and put your key in it:
+   ```bash
+   cp .env.example .env
+   # open .env and replace your_key_here with your real key
+   ```
+   `.env` is ignored by Git. Never commit it, and never put the key in `config.yaml` or the README.
 
 ## How to run the pipeline
 
 With your virtual environment active, from the repo root:
 
 ```bash
-python -m weatherflow run
+python -m weatherflow run                      # both sources (default)
+python -m weatherflow run --source open_meteo  # Open-Meteo only
+python -m weatherflow run --source weatherapi  # WeatherAPI only
 ```
 
+If `WEATHERAPI_KEY` is missing and WeatherAPI is requested, the run stops straight away with a clear message and exit code 1. No request is sent.
+
 The pipeline has five steps:
-1. **Extract:** calls the Open-Meteo API for each city (retrying temporary errors up to 3 times) and saves the raw JSON in `data/raw/`.
+1. **Extract:** calls the Open-Meteo and WeatherAPI APIs for each city (retrying timeouts and server errors up to 3 times, never retrying 401 or 403) and saves the raw JSON in `data/raw/`.
 2. **Transform:** cleans the data into one table: UTC and London times, units, weather descriptions, Beaufort wind scale and an outdoor work risk level.
 3. **Validate:** runs 8 data quality checks. Bad rows are quarantined, serious problems stop the run, and a report is written to `docs/dq_reports/`.
 4. **Load:** writes the good rows into a star schema in `data/weather.db` (SQLite) inside one transaction.
@@ -74,7 +84,7 @@ Validation runs between transform and load (`src/weatherflow/validate.py`):
 |---|---|---|
 | Quarantine | The row is set aside with a reason in `data/quarantine/` | required fields not empty, temperature range, humidity range, rain and wind not negative |
 | Fail run | Nothing is loaded and the run exits with code 1 | no duplicate rows, every city has every hour |
-| Warn | A warning is logged and the data still loads | data freshness, feels-like close to temperature |
+| Warn | A warning is logged and the data still loads | data freshness, feels-like close to temperature, the two sources agree on temperature (threshold `cross_source_temp_gap_c` in `config.yaml`) |
 
 Every run writes a summary to `docs/dq_reports/<timestamp>.md`.
 
@@ -142,6 +152,7 @@ TOTAL                            420    118    72%
 ```
 weatherflow-Atul/
 ├── config.yaml                  # all settings and thresholds
+├── .env.example                 # variables you need, with fake values (copy to .env)
 ├── pyproject.toml               # package definition
 ├── requirements.txt             # packages the pipeline needs
 ├── requirements-dev.txt         # extra tools for notebooks and tests
@@ -155,7 +166,7 @@ weatherflow-Atul/
 │   ├── validate.py              # data quality checks and quarantine
 │   ├── load.py                  # star schema load and Parquet output
 │   ├── reference.py             # loads the weather code lookup
-│   └── reference/wmo_codes.csv  # weather code descriptions
+│   └── reference/               # wmo_codes.csv and weatherapi_codes.csv (weather code lookups)
 ├── sql/
 │   ├── schema.sql               # the three tables
 │   └── analysis_queries.sql     # 5 analysis queries (joins on the star schema)
@@ -173,9 +184,12 @@ weatherflow-Atul/
 │   ├── test_load.py
 │   ├── test_main.py
 │   ├── test_config.py
-│   └── test_watermark.py
+│   ├── test_watermark.py
+│   ├── test_normalise_weatherapi.py
+│   ├── test_extract_weatherapi.py
+│   └── test_cross_source.py
 ├── notebooks/                   # 01_explore.ipynb
-├── docs/                        # data dictionary, ERD, reports, reflections
+├── docs/                        # data dictionary, ERD, reports, reflections, adr/ (decisions)
 └── etl_v1.py                    # Week 1 version, kept for history
 ```
 `data/` and `*.db` are created when you run the pipeline. They are not stored in Git.
