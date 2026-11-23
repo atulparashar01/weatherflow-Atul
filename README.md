@@ -22,12 +22,19 @@ A regional events company plans outdoor work in five UK cities: London, Manchest
    python -m pip install -e .
    ```
    To also use the notebooks and run tests, install `requirements-dev.txt` instead of `requirements.txt`.
-5. Add your WeatherAPI key. Sign up (free) at weatherapi.com, then copy the example file and put your key in it:
+5. Create your `.env` file. Sign up (free) at weatherapi.com for a key, then copy the example file and fill it in:
    ```bash
    cp .env.example .env
-   # open .env and replace your_key_here with your real key
+   # open .env: put your WeatherAPI key in, and choose a database password
+   # (use the same password in POSTGRES_PASSWORD and in DATABASE_URL; letters and numbers only)
    ```
-   `.env` is ignored by Git. Never commit it, and never put the key in `config.yaml` or the README.
+   `.env` is ignored by Git. Never commit it, and never put the key or the password in `config.yaml` or the README.
+6. Install [Docker Desktop](https://docs.docker.com/desktop/) and start the PostgreSQL warehouse:
+   ```bash
+   docker compose up -d warehouse
+   docker compose ps          # wait until the status says "healthy"
+   ```
+   The data is kept in a named volume (`pgdata`), so it survives `docker compose down`. Do not use `docker compose down -v` unless you want to delete the database.
 
 ## How to run the pipeline
 
@@ -45,7 +52,7 @@ The pipeline has five steps:
 1. **Extract:** calls the Open-Meteo and WeatherAPI APIs for each city (retrying timeouts and server errors up to 3 times, never retrying 401 or 403) and saves the raw JSON in `data/raw/`.
 2. **Transform:** cleans the data into one table: UTC and London times, units, weather descriptions, Beaufort wind scale and an outdoor work risk level.
 3. **Validate:** runs 8 data quality checks. Bad rows are quarantined, serious problems stop the run, and a report is written to `docs/dq_reports/`.
-4. **Load:** writes the good rows into a star schema in `data/weather.db` (SQLite) inside one transaction.
+4. **Load:** writes the good rows into a star schema in PostgreSQL (the `warehouse` container, found through `DATABASE_URL`) inside one transaction.
 5. **Save:** writes the same rows as Parquet files in `data/processed/`, partitioned by run date.
 
 Example output:
@@ -61,13 +68,13 @@ Example output:
 2026-11-18 18:19:04 | INFO | weatherflow.pipeline | Run succeeded
 ```
 
-The command exits with code 1 if a city could not be fetched or a blocking data quality check failed.
+The command exits with code 1 if a city could not be fetched, a blocking data quality check failed, or the database cannot be reached (is `docker compose up -d warehouse` running?).
 
 ## Configuration
 All settings are in `config.yaml`: the API, the cities, the folders, the `dim_date` range and the data quality thresholds. Change a limit there, not in the code.
 
 ## Data model
-The database is a star schema (see `docs/erd.md`):
+The database is a PostgreSQL star schema (`sql/schema_postgres.sql`, see `docs/erd.md`). Times use `TIMESTAMPTZ`, flags use `BOOLEAN`:
 
 - `fact_weather_hourly`: one row per city, per hour, per source. Primary key `(city_id, observed_at_utc, source)`.
 - `dim_city`: one row per city.
@@ -98,14 +105,17 @@ It injects a 99 °C reading (quarantined) and a duplicate row (the run is stoppe
 
 ## Check the data with SQL
 
+With the warehouse running, from the repo root:
+
 ```bash
-sqlite3 data/weather.db < sql/analysis_queries.sql
+docker compose exec -T warehouse sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < sql/analysis_queries.sql
 ```
 
-No `sqlite3` command on your computer? Use Python instead:
+To see how many rows each table has, or to prove that a failed load saves nothing:
 
 ```bash
-python -c "import sqlite3; print(sqlite3.connect('data/weather.db').execute('SELECT c.city_name, COUNT(*) FROM fact_weather_hourly f JOIN dim_city c ON c.city_id = f.city_id GROUP BY c.city_name').fetchall())"
+python scripts/show_counts.py
+python scripts/force_error.py
 ```
 
 ## Tests
@@ -116,7 +126,7 @@ Install the package and the dev tools first (`python -m pip install -r requireme
 python -m pytest -v --cov=src --cov-report=term-missing
 ```
 
-The tests never call the real API. They use a saved response (`tests/fixtures/open_meteo_london.json`) and a mocked API, so they run offline.
+The tests never call the real API. They use a saved response (`tests/fixtures/open_meteo_london.json`) and a mocked API. The two database tests (`test_load.py`, `test_watermark.py`) need the warehouse running (`docker compose up -d warehouse`). They work in a temporary schema that is deleted afterwards, so your real tables are never touched. If the database is not running, they are skipped.
 
 | File | What it tests |
 |---|---|
@@ -152,6 +162,7 @@ TOTAL                            420    118    72%
 ```
 weatherflow-Atul/
 ├── config.yaml                  # all settings and thresholds
+├── docker-compose.yml           # the PostgreSQL 18 warehouse service
 ├── .env.example                 # variables you need, with fake values (copy to .env)
 ├── pyproject.toml               # package definition
 ├── requirements.txt             # packages the pipeline needs
@@ -164,17 +175,18 @@ weatherflow-Atul/
 │   ├── extract.py               # calls the API (with retries)
 │   ├── transform.py             # cleans the data and adds derived columns
 │   ├── validate.py              # data quality checks and quarantine
-│   ├── load.py                  # star schema load and Parquet output
+│   ├── load.py                  # PostgreSQL load (psycopg 3) and Parquet output
 │   ├── reference.py             # loads the weather code lookup
 │   └── reference/               # wmo_codes.csv and weatherapi_codes.csv (weather code lookups)
 ├── sql/
-│   ├── schema.sql               # the three tables
-│   └── analysis_queries.sql     # 5 analysis queries (joins on the star schema)
+│   ├── schema_postgres.sql      # the three tables (PostgreSQL)
+│   ├── schema.sql               # the old SQLite version, kept for history
+│   └── analysis_queries.sql     # 5 analysis queries (joins on the star schema, PostgreSQL)
 ├── scripts/
 │   ├── compare_formats.py       # CSV vs Parquet file size
 │   ├── inject_bad_data.py       # proves the quality gate works
-│   ├── force_error.py           # proves a failed load saves nothing
-│   └── show_counts.py           # prints the row count of each table
+│   ├── force_error.py           # proves a failed load saves nothing (PostgreSQL)
+│   └── show_counts.py           # prints the row count of each table (PostgreSQL)
 ├── tests/
 │   ├── conftest.py              # shared fixtures
 │   ├── fixtures/                # saved API response used by the tests
@@ -192,7 +204,7 @@ weatherflow-Atul/
 ├── docs/                        # data dictionary, ERD, reports, reflections, adr/ (decisions)
 └── etl_v1.py                    # Week 1 version, kept for history
 ```
-`data/` and `*.db` are created when you run the pipeline. They are not stored in Git.
+`data/` is created when you run the pipeline. It is not stored in Git. The database itself lives in the Docker volume `pgdata`.
 
 ## Author
 Atul
