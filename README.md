@@ -70,6 +70,22 @@ Example output:
 
 The command exits with code 1 if a city could not be fetched, a blocking data quality check failed, or the database cannot be reached (is `docker compose up -d warehouse` running?).
 
+## Run with Docker
+The pipeline also runs as a container, so it behaves the same on any computer. You need Docker Desktop and a `.env` file (see "How to set up").
+
+```bash
+docker compose up -d warehouse                       # start PostgreSQL and wait until it is healthy
+docker compose build pipeline                        # build the pipeline image
+docker compose run --rm pipeline run                 # a normal run (both sources)
+docker compose run --rm pipeline run --source weatherapi
+docker compose run --rm pipeline backfill --days 7   # load history
+```
+
+- Everything after `pipeline` is passed to `python -m weatherflow`, so the container's **exit code is the CLI's**: `0` when the run worked, `1` when it failed (check it with `echo $?`).
+- The key and the database password are **not in the image**. `.env` is excluded by `.dockerignore` and is passed in at run time with `env_file`.
+- Inside Compose the database is called `warehouse` (`warehouse:5432`), so the pipeline service sets its own `DATABASE_URL`. From your laptop it is `localhost:5433`, as in `.env`.
+- `./data` on your computer is mounted into the container, so the raw, processed and quarantine files appear in your project folder. The DQ reports stay inside the container.
+
 ## Configuration
 All settings are in `config.yaml`: the API, the cities, the folders, the `dim_date` range and the data quality thresholds. Change a limit there, not in the code.
 
@@ -162,7 +178,9 @@ TOTAL                            420    118    72%
 ```
 weatherflow-Atul/
 ├── config.yaml                  # all settings and thresholds
-├── docker-compose.yml           # the PostgreSQL 18 warehouse service
+├── Dockerfile                   # builds the pipeline image
+├── .dockerignore                # keeps .env, data and .git out of the image
+├── docker-compose.yml           # the PostgreSQL 18 warehouse and the pipeline service
 ├── .env.example                 # variables you need, with fake values (copy to .env)
 ├── pyproject.toml               # package definition
 ├── requirements.txt             # packages the pipeline needs
