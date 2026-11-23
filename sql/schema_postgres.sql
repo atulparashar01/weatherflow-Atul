@@ -1,0 +1,52 @@
+-- WeatherFlow star schema (PostgreSQL)
+-- Grain of the fact table: one row per city, per hour, per source.
+-- Safe to run many times: every table uses CREATE TABLE IF NOT EXISTS.
+
+-- 1. Dimension: one row per city
+CREATE TABLE IF NOT EXISTS dim_city (
+    city_id    INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,   -- number made by the database
+    city_name  TEXT             NOT NULL UNIQUE,                   -- natural key, e.g. London
+    country    TEXT             NOT NULL,
+    latitude   DOUBLE PRECISION NOT NULL,
+    longitude  DOUBLE PRECISION NOT NULL
+);
+
+-- 2. Dimension: one row per calendar day
+CREATE TABLE IF NOT EXISTS dim_date (
+    date_id      INTEGER PRIMARY KEY,                              -- YYYYMMDD, e.g. 20260701
+    full_date    DATE    NOT NULL UNIQUE,                          -- 2026-07-01
+    year         INTEGER NOT NULL,
+    month        INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    day          INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    day_of_week  TEXT    NOT NULL,                                 -- Monday ... Sunday
+    is_weekend   BOOLEAN NOT NULL
+);
+
+-- 3. Fact: the weather measurements
+CREATE TABLE IF NOT EXISTS fact_weather_hourly (
+    city_id              INTEGER     NOT NULL,
+    date_id              INTEGER     NOT NULL,                     -- London (local) date
+    observed_at_utc      TIMESTAMPTZ NOT NULL,                     -- exact hour (an instant)
+    hour_local           INTEGER     NOT NULL CHECK (hour_local BETWEEN 0 AND 23),
+    source               TEXT        NOT NULL,                     -- e.g. open_meteo_forecast
+
+    temperature_c        DOUBLE PRECISION,
+    temperature_f        DOUBLE PRECISION,
+    feels_like_c         DOUBLE PRECISION,
+    humidity_pct         INTEGER,
+    precipitation_mm     DOUBLE PRECISION,
+    wind_speed_kmh       DOUBLE PRECISION,
+    wind_speed_ms        DOUBLE PRECISION,
+    beaufort_scale       INTEGER,
+    weather_code         INTEGER,
+    weather_description  TEXT        NOT NULL,
+    weather_category     TEXT        NOT NULL,
+    is_daylight          BOOLEAN,
+    outdoor_work_risk    TEXT        NOT NULL
+                         CHECK (outdoor_work_risk IN ('low', 'medium', 'high')),
+    ingested_at_utc      TIMESTAMPTZ NOT NULL,
+
+    PRIMARY KEY (city_id, observed_at_utc, source),
+    FOREIGN KEY (city_id) REFERENCES dim_city (city_id),
+    FOREIGN KEY (date_id) REFERENCES dim_date (date_id)
+);
