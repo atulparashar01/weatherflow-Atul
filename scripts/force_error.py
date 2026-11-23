@@ -1,22 +1,20 @@
 """Force an error in the middle of a load and show that nothing is saved."""
 
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
+import psycopg
 
 from weatherflow.config import load_config
-from weatherflow.load import load
+from weatherflow.load import get_database_url, load
 
 config = load_config()
 paths = config["paths"]
 
 
 def count_fact_rows():
-    conn = sqlite3.connect(paths["database"])
-    count = conn.execute("SELECT COUNT(*) FROM fact_weather_hourly").fetchone()[0]
-    conn.close()
-    return count
+    with psycopg.connect(get_database_url()) as conn:
+        return conn.execute("SELECT COUNT(*) FROM fact_weather_hourly").fetchone()[0]
 
 
 # 1. Take the data from the newest Parquet file
@@ -34,9 +32,9 @@ before = count_fact_rows()
 print("Fact rows BEFORE:", before)
 
 try:
-    load(df, config["cities"], config["dim_date"], paths["database"], paths["schema"])
+    load(df, config["cities"], config["dim_date"], paths["schema"])
 except Exception as error:
-    print("The load failed, as expected:", error)
+    print("The load failed, as expected:", type(error).__name__)
 
 after = count_fact_rows()
 print("Fact rows AFTER: ", after)

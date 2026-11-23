@@ -26,7 +26,9 @@ paths:                       # relative to the folder that contains config.yaml
   quarantine_dir: data/quarantine
   dq_reports_dir: docs/dq_reports
   database: data/weather.db
-  schema: sql/schema.sql
+  schema: sql/schema.
+  database: data/weather.db   # old SQLite file, no longer used (the warehouse is PostgreSQL)
+  schema: sql/schema_postgres.sql
 
 dim_date:
   start: "2025-01-01"
