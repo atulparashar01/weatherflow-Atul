@@ -1,0 +1,19 @@
+# Secrets: they arrive at run time from env_file, never inside the image
+.env
+.env.*
+
+# Things that are yours, not the image's
+.venv/
+.git/
+data/
+*.db
+.coverage
+.pytest_cache/
+**/__pycache__
+**/*.pyc
+
+# Not needed to run the pipeline
+tests/
+docs/
+notebooks/
+scripts/

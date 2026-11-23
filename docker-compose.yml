@@ -14,5 +14,18 @@ services:
       interval: 5s
       retries: 10
 
+  pipeline:
+    build: .
+    image: weatherflow-pipeline
+    env_file: .env
+    environment:
+      # inside Docker the database is the "warehouse" service, not localhost
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@warehouse:5432/${POSTGRES_DB}
+    depends_on:
+      warehouse:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+
 volumes:
   pgdata:
