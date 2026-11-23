@@ -1,11 +1,11 @@
 """Wires the steps together: extract -> transform -> validate -> load."""
 import logging
-import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import psycopg
 import requests
 
 from weatherflow.config import load_config
@@ -17,7 +17,14 @@ from weatherflow.extract import (
     get_weatherapi_key,
     save_raw,
 )
-from weatherflow.load import get_high_water_mark, load, read_source_rows, write_parquet
+from weatherflow.load import (
+    DatabaseUrlError,
+    get_database_url,
+    get_high_water_mark,
+    load,
+    read_source_rows,
+    write_parquet,
+)
 from weatherflow.reference import load_weatherapi_codes, load_wmo_codes
 from weatherflow.transform import transform
 from weatherflow.validate import (
@@ -47,8 +54,7 @@ def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
     # WeatherAPI is compared with the Open-Meteo rows that are already in the database
     other = None
     if source == SOURCE_WEATHERAPI:
-        other = read_source_rows(paths["database"], SOURCE_FORECAST,
-                                 df["observed_at_utc"].min(), df["observed_at_utc"].max())
+        other = read_source_rows(SOURCE_FORECAST, df["observed_at_utc"].min(), df["observed_at_utc"].max())
 
     good, quarantined, results = validate(df, config, source, check_freshness_too=is_normal_run,
                                           other_source_rows=other)
@@ -61,25 +67,19 @@ def process_and_load(raw, config, source, run_time, is_normal_run) -> int:
         logger.error("Run FAILED: %s", error)
         return 1
 
-    load(good, config["cities"], config["dim_date"], paths["database"], paths["schema"], source)
+    load(good, config["cities"], config["dim_date"], paths["schema"], source)
     write_parquet(good, paths["processed_dir"], run_time, source)
     return 0
 
 
 def find_start_date(config: dict, now: datetime):
     """Where should this run start? None means "no high-water mark yet"."""
-    db_path = Path(config["paths"]["database"])
-    if not db_path.exists():
-        return None
-
-    conn = sqlite3.connect(db_path)
     try:
-        marks = [get_high_water_mark(conn, city["name"], SOURCE_FORECAST, now)
-                 for city in config["cities"]]
-    except sqlite3.OperationalError:                  # the tables do not exist yet
+        with psycopg.connect(get_database_url()) as conn:
+            marks = [get_high_water_mark(conn, city["name"], SOURCE_FORECAST, now)
+                     for city in config["cities"]]
+    except psycopg.errors.UndefinedTable:             # the tables do not exist yet
         return None
-    finally:
-        conn.close()
 
     if any(mark is None for mark in marks):
         return None
@@ -134,6 +134,12 @@ def run_pipeline(source: str = "all") -> int:
     use_open_meteo = source in ("open_meteo", "all")
     use_weatherapi = source in ("weatherapi", "all")
 
+    try:
+        get_database_url()                    # fail now if DATABASE_URL is missing
+    except DatabaseUrlError as error:
+        logger.error("Run FAILED: %s", error)
+        return 1
+
     if use_weatherapi:
         try:
             get_weatherapi_key()              # fail now, before any request is sent
@@ -142,10 +148,15 @@ def run_pipeline(source: str = "all") -> int:
             return 1
 
     status = 0
-    if use_open_meteo:
-        status = max(status, run_open_meteo(config, run_time))
-    if use_weatherapi:
-        status = max(status, run_weatherapi(config, run_time))
+    try:
+        if use_open_meteo:
+            status = max(status, run_open_meteo(config, run_time))
+        if use_weatherapi:
+            status = max(status, run_weatherapi(config, run_time))
+    except psycopg.OperationalError as error:
+        logger.error("Run FAILED: cannot reach the database (is 'docker compose up -d warehouse' running?): %s",
+                     type(error).__name__)
+        return 1
 
     if status == 0:
         logger.info("Run succeeded")
