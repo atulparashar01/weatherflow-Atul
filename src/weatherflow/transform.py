@@ -97,16 +97,50 @@ def deduplicate(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates(subset=["city", "observed_at_utc"], keep="last")
 
 
-def transform(raw_records: list[tuple[str, dict]], wmo_codes: pd.DataFrame) -> pd.DataFrame:
-    """Run every transformation in order and return the clean table."""
-    frames = [flatten_payload(payload, city) for city, payload in raw_records]
-    df = pd.concat(frames, ignore_index=True)
+def transform(raw_records: list[tuple[str, dict]], codes: pd.DataFrame,
+              source: str = "open_meteo") -> pd.DataFrame:
+    """Run every transformation in order and return the clean table.
 
-    df = standardise_columns(df)
-    df = add_weather_description(df, wmo_codes)
+    Only the first step depends on the source. After that, both sources use the same code.
+    `codes` is the weather code lookup that matches the source (WMO or WeatherAPI).
+    """
+    if source == "weatherapi":
+        frames = [normalise_weatherapi(payload, city) for city, payload in raw_records]
+        df = pd.concat(frames, ignore_index=True)
+    else:
+        frames = [flatten_payload(payload, city) for city, payload in raw_records]
+        df = standardise_columns(pd.concat(frames, ignore_index=True))
+
+    df = add_weather_description(df, codes)
     df = add_derived_metrics(df)
     df["ingested_at_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     df = deduplicate(df)
 
     logger.info("Transformed %d rows for %d cities", len(df), df["city"].nunique())
     return df[COLUMNS]
+
+
+def normalise_weatherapi(payload: dict, city: str, local_timezone: str = "Europe/London") -> pd.DataFrame:
+    """Turn one WeatherAPI response into our standard columns, one row per hour.
+
+    A pure function: no files, no API, no secrets. Time comes from time_epoch,
+    which is Unix seconds in UTC (the text field "time" is local time).
+    """
+    rows = []
+    for day in payload["forecast"]["forecastday"]:
+        for hour in day["hour"]:
+            rows.append({
+                "city": city,
+                "observed_at_utc": pd.to_datetime(hour["time_epoch"], unit="s", utc=True),
+                "temperature_c": hour["temp_c"],
+                "feels_like_c": hour["feelslike_c"],
+                "humidity_pct": hour["humidity"],
+                "precipitation_mm": hour["precip_mm"],
+                "wind_speed_kmh": hour["wind_kph"],        # already km/h
+                "weather_code": hour["condition"]["code"],
+                "is_daylight": hour["is_day"],
+            })
+    df = pd.DataFrame(rows)
+    df["observed_at_local"] = df["observed_at_utc"].dt.tz_convert(local_timezone)
+    df["is_daylight"] = df["is_daylight"].astype("boolean")     # 1 -> True, 0 -> False
+    return df

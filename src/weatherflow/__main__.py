@@ -14,7 +14,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("run", help="run the pipeline")
+    run = subparsers.add_parser("run", help="run the pipeline")
+    run.add_argument("--source", choices=["open_meteo", "weatherapi", "all"], default="all",
+                     help="which source to load (default all)")
 
     backfill = subparsers.add_parser("backfill", help="load history from the archive API")
     backfill.add_argument("--days", type=int, default=30,
@@ -34,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.command == "run":
-        return run_pipeline()
+        return run_pipeline(args.source)
     if args.command == "backfill":
         return run_backfill(args.days, args.start_date, args.end_date)
     return 1

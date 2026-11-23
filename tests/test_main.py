@@ -6,13 +6,13 @@ from weatherflow.__main__ import main
 
 
 def test_main_run_returns_0_when_the_pipeline_succeeds(monkeypatch):
-    monkeypatch.setattr("weatherflow.__main__.run_pipeline", lambda: 0)
+    monkeypatch.setattr("weatherflow.__main__.run_pipeline", lambda source: 0)
 
     assert main(["run"]) == 0
 
 
 def test_main_run_returns_1_when_the_pipeline_fails(monkeypatch):
-    monkeypatch.setattr("weatherflow.__main__.run_pipeline", lambda: 1)
+    monkeypatch.setattr("weatherflow.__main__.run_pipeline", lambda source: 1)
 
     assert main(["run"]) == 1
 
@@ -30,3 +30,13 @@ def test_main_backfill_passes_its_dates_to_the_pipeline(monkeypatch):
 
     assert status == 0
     assert received == {"days": 10, "start_date": date(2026, 10, 1), "end_date": date(2026, 10, 10)}
+
+
+def test_main_run_passes_the_source_to_the_pipeline(monkeypatch):
+    received = []
+    monkeypatch.setattr("weatherflow.__main__.run_pipeline", lambda source: received.append(source) or 0)
+
+    main(["run", "--source", "weatherapi"])
+    main(["run"])
+
+    assert received == ["weatherapi", "all"]
