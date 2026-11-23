@@ -1,10 +1,11 @@
 """Load config.yaml and check that nothing important is missing."""
 from pathlib import Path
+import os
 
 import yaml
 
 # src/weatherflow/config.py -> parents[2] is the project root
-CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.yaml"
+CONFIG_FILE = Path(os.getenv("WEATHERFLOW_CONFIG") or Path(__file__).resolve().parents[2] / "config.yaml")
 
 
 def load_config() -> dict:
