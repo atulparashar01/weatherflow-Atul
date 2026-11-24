@@ -15,4 +15,4 @@ docs/dq_reports/*.md.coverage
 .pytest_cache/
 docs/dq_reports/*.md
 orchestration/logs/
-orchestration/__pycache__/
+orchestration/__pycache__/orchestration/config/
