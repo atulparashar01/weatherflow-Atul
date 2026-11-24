@@ -16,3 +16,4 @@ docs/dq_reports/*.md.coverage
 docs/dq_reports/*.md
 orchestration/logs/
 orchestration/__pycache__/orchestration/config/
+orchestration/config/
