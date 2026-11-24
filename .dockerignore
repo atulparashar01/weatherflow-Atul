@@ -17,3 +17,6 @@ tests/
 docs/
 notebooks/
 scripts/
+orchestration/
+**/*.egg-info
+build/
