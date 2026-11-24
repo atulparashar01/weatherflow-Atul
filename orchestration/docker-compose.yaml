@@ -91,6 +91,9 @@ x-airflow-common:
       condition: service_healthy
     postgres:
       condition: service_healthy
+  networks:
+    - default
+    - weatherflow-net
 
 services:
   postgres:
@@ -338,3 +341,7 @@ services:
 
 volumes:
   postgres-db-volume:
+
+networks:
+  weatherflow-net:
+    external: true
