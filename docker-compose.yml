@@ -2,24 +2,27 @@ services:
   warehouse:
     image: postgres:18
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql        # NOT /var/lib/postgresql/data on 18+
+      - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
+      timeout: 5s
       retries: 10
+    networks:
+      - default
+      - weatherflow-net
 
   pipeline:
     build: .
     image: weatherflow-pipeline
     env_file: .env
     environment:
-      # inside Docker the database is the "warehouse" service, not localhost
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@warehouse:5432/${POSTGRES_DB}
     depends_on:
       warehouse:
@@ -29,3 +32,7 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  weatherflow-net:
+    name: weatherflow-net

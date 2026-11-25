@@ -86,6 +86,27 @@ docker compose run --rm pipeline backfill --days 7   # load history
 - Inside Compose the database is called `warehouse` (`warehouse:5432`), so the pipeline service sets its own `DATABASE_URL`. From your laptop it is `localhost:5433`, as in `.env`.
 - `./data` on your computer is mounted into the container, so the raw, processed and quarantine files appear in your project folder. The DQ reports stay inside the container.
 
+## Orchestration with Airflow
+Airflow 3.4.0 runs the pipeline every hour. Its files are in `orchestration/`. The DAG is `orchestration/dags/weatherflow_hourly.py`: it runs `run_open_meteo`, then `run_weatherapi`, then `check_risk_alerts`, with 2 retries (5 minutes apart) and an `ALERT:` log line if a task finally fails.
+
+To start it:
+
+1. Start the warehouse first (project root). This also creates the shared network `weatherflow-net`:
+   ```bash
+   docker compose up -d warehouse
+   ```
+2. Create Airflow's settings file (once). In `orchestration/`, copy `.env.example` to `.env` and set `WEATHERAPI_KEY` and `DATABASE_URL` (the host is `warehouse:5432`). `orchestration/.env` is git-ignored.
+3. Build and start Airflow (from `orchestration/`):
+   ```bash
+   docker compose build
+   docker compose up -d
+   ```
+4. Open http://localhost:8080 (login `airflow` / `airflow`) and switch on `weatherflow_hourly`.
+
+To stop it, run `docker compose down` in `orchestration/`. Run `docker compose build` again after you change code in `src/`.
+
+Airflow's own database holds only run history. The weather data stays in the `warehouse` database (see `docs/adr/002-shared-docker-network.md`).
+
 ## Configuration
 All settings are in `config.yaml`: the API, the cities, the folders, the `dim_date` range and the data quality thresholds. Change a limit there, not in the code.
 
@@ -182,6 +203,12 @@ weatherflow-Atul/
 ├── .dockerignore                # keeps .env, data and .git out of the image
 ├── docker-compose.yml           # the PostgreSQL 18 warehouse and the pipeline service
 ├── .env.example                 # variables you need, with fake values (copy to .env)
+├── orchestration/               # Airflow 3.4.0 (hourly schedule)
+│   ├── Dockerfile               # Airflow image with the pipeline installed
+│   ├── docker-compose.yaml      # Airflow services, joined to the warehouse network
+│   ├── .env.example             # Airflow variables with fake values (copy to .env)
+│   └── dags/
+│       └── weatherflow_hourly.py   # the DAG
 ├── pyproject.toml               # package definition
 ├── requirements.txt             # packages the pipeline needs
 ├── requirements-dev.txt         # extra tools for notebooks and tests
