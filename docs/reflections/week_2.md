@@ -4,8 +4,6 @@
 **Week:** 2 (Thu 12 Nov to Wed 18 Nov 2026)
 **Repo:** https://github.com/atulparashar01/weatherflow-Atul
 
-> Draft. Copy these sections into the programme's reflection template if its headings differ, and replace anything in [square brackets] with your own details.
-
 ## What I built
 
 | Task | Deliverable | Status |
@@ -33,7 +31,6 @@
 - **Old files kept coming back.** Several errors (a `TypeError` in `load()`, a missing `is_day` column, a missing `fetch_city_range`) came from having an old copy of a file next to new code. I now check that each file really changed before I run the pipeline.
 - **OneDrive and Git.** Git sometimes asks "Deletion of directory failed" inside OneDrive. I answer `n`.
 - **No review partner for Task 2.6.** I merged the backfill PR without a second person reviewing it.
-- [Add anything else that was hard for you.]
 
 ## What went well
 
@@ -65,10 +62,14 @@ Python packaging and a command-line interface, YAML configuration, logging, pand
 
 ## Goals for Week 3
 
-- [Replace with the Week 3 goals from the programme.]
+- Add a second data source (WeatherAPI.com) and handle its API key safely with a `.env` file.
+- Move the warehouse from SQLite to PostgreSQL running in Docker.
+- Put the pipeline in a Docker container.
+- Schedule the pipeline every hour with Airflow.
 - Raise `pipeline.py` test coverage.
 - Get a peer review on my next PR.
 
 ## Questions I still have
 
-- [Add one or two, for example how to schedule the pipeline every hour, or how to test a function that calls several others.]
+- How do I schedule the pipeline to run every hour without starting it by hand?
+- How do I test a function that calls several others, like `pipeline.py`?
