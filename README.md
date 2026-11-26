@@ -160,7 +160,7 @@ python scripts/force_error.py
 Install the package and the dev tools first (`python -m pip install -r requirements-dev.txt` and `python -m pip install -e .`), then run:
 
 ```bash
-python -m pytest -v --cov=src --cov-report=term-missing
+python -m pytest tests -v --cov=src --cov-report=term-missing
 ```
 
 The tests never call the real API. They use a saved response (`tests/fixtures/open_meteo_london.json`) and a mocked API. The two database tests (`test_load.py`, `test_watermark.py`) need the warehouse running (`docker compose up -d warehouse`). They work in a temporary schema that is deleted afterwards, so your real tables are never touched. If the database is not running, they are skipped.
@@ -174,26 +174,30 @@ The tests never call the real API. They use a saved response (`tests/fixtures/op
 | `tests/test_main.py` | `main(["run"])` returns 0 or 1, backfill dates are passed on (pipeline mocked) |
 | `tests/test_config.py` | paths made absolute, a missing section or key is reported by name |
 | `tests/test_watermark.py` | high-water mark ignores future forecast hours, is empty on a new database |
+| `tests/test_normalise_weatherapi.py` | WeatherAPI hours are converted to the right UTC hour (`time_epoch`) |
+| `tests/test_extract_weatherapi.py` | WeatherAPI download and raw file (API mocked) |
+| `tests/test_cross_source.py` | a warning when the two sources differ by more than the threshold |
+| `tests/test_pipeline.py` | the pipeline steps joined together for one source (steps mocked) |
 
-Latest result: 36 passed. Coverage summary (every module in `src/weatherflow/` is included):
+Latest result: 49 passed. Coverage summary (every module in `src/weatherflow/` is included):
 
 ```
 Name                           Stmts   Miss  Cover
 ------------------------------------------------------------
 src\weatherflow\__init__.py        0      0   100%
-src\weatherflow\__main__.py       24      2    92%
-src\weatherflow\config.py         19      1    95%
-src\weatherflow\extract.py        55     20    64%
-src\weatherflow\load.py           62      6    90%
-src\weatherflow\pipeline.py       96     76    21%
-src\weatherflow\reference.py       6      0   100%
-src\weatherflow\transform.py      53      0   100%
-src\weatherflow\validate.py      105     13    88%
+src\weatherflow\__main__.py       25      2    92%
+src\weatherflow\config.py         20      1    95%
+src\weatherflow\extract.py        86     23    73%
+src\weatherflow\load.py           87     15    83%
+src\weatherflow\pipeline.py      131     85    35%
+src\weatherflow\reference.py       9      0   100%
+src\weatherflow\transform.py      64      2    97%
+src\weatherflow\validate.py      128     15    88%
 ------------------------------------------------------------
-TOTAL                            420    118    72%
+TOTAL                            550    143    74%
 ```
 
-`pipeline.py` is the weakest module (21%). It joins the other steps together and is checked by running the real pipeline, not by unit tests.
+`pipeline.py` is the weakest module (35%). It joins the other steps together, so most of it is checked by running the real pipeline, not by unit tests.
 
 ## Project structure
 ```
@@ -244,7 +248,8 @@ weatherflow-Atul/
 │   ├── test_watermark.py
 │   ├── test_normalise_weatherapi.py
 │   ├── test_extract_weatherapi.py
-│   └── test_cross_source.py
+│   ├── test_cross_source.py
+│   └── test_pipeline.py
 ├── notebooks/                   # 01_explore.ipynb
 ├── docs/                        # data dictionary, ERD, reports, reflections, adr/ (decisions)
 └── etl_v1.py                    # Week 1 version, kept for history
